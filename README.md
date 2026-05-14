@@ -4,17 +4,54 @@
 [![Python](https://img.shields.io/pypi/pyversions/reducethemtokens)](https://pypi.org/project/reducethemtokens/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Compress any code repository into a compact structural skeleton for use as LLM context.
+Give any LLM a complete map of your codebase in a single, cheap read.
 
-Instead of sending tens of thousands of lines of source code to a language model, `rtt` extracts only what matters — function signatures, class hierarchies, method lists, and imports — and formats it as dense, readable plain text. The result is typically 85–95% smaller than the raw codebase while retaining 100% of the structural information a model needs to understand your API.
+`rtt` extracts every file's imports, function signatures, class hierarchies, and method
+lists into a compact plain-text skeleton — typically 90% smaller than the raw source —
+and wires it into your agent's config so the map is available from the first message of
+every session.
 
 ---
 
-## Why
+## The problem it solves
 
-Large language models have finite context windows. When you want a model to help with a codebase it has never seen, you either paste in raw files and burn most of your token budget on implementation details the model doesn't need, or you summarize manually and risk missing things.
+Modern coding agents (Cursor, Claude Code, Copilot) are good at retrieving context for
+*specific, targeted queries*. Ask about one bug, one function, one file — they find it.
 
-`rtt` automates the summarization step. It gives the model a complete map of every file — what it imports, what it defines, and how those definitions are shaped — without any of the function bodies.
+But they struggle with the **orientation problem**: starting a session on an unfamiliar
+codebase, or asking questions that span the whole structure. Before an agent can retrieve
+the right context, it needs to understand what exists and where. Without that map, it
+either scans files speculatively (burning tokens) or makes wrong assumptions about
+structure.
+
+`rtt` solves this by providing that map upfront, once, cheaply. The agent reads the
+skeleton at session start, knows the full API surface, and then opens only the specific
+files it actually needs.
+
+**rtt is not a replacement for agent retrieval.** Retrieval is better for targeted,
+implementation-level tasks. rtt is the orientation layer that makes retrieval more
+accurate by giving the agent the right mental model before it starts searching.
+
+---
+
+## When to use it
+
+**Use rtt when:**
+
+- Starting a session on a codebase the agent hasn't seen before
+- The task involves cross-cutting changes across many files (a refactor, a rename, adding
+  a feature that touches multiple layers)
+- You're using a chat interface (ChatGPT, Claude.ai, direct API) that has no built-in
+  retrieval — every session starts from zero
+- You're building a CI pipeline, a code review bot, or any automated workflow where
+  reproducible, deterministic context matters
+- You want to give an LLM repo context without setting up a vector store or any
+  additional infrastructure
+
+**rtt is less useful when:**
+
+- You're asking about one specific file or function — just open it
+- Your agent already has full retrieval and you're working on targeted, well-scoped tasks
 
 ---
 
@@ -26,38 +63,31 @@ pip install reducethemtokens
 
 Requires Python 3.9+.
 
-For the LLM evaluation mode (optional):
-
-```
-pip install "reducethemtokens[llm]"
-```
-
 ---
 
 ## Quick start
 
 ```
-# Index the repo and wire it into every agent config automatically
+cd your-repo
 rtt install .
 ```
 
-That single command writes `.rtt/context.txt` and updates `CLAUDE.md`, `AGENTS.md`,
-`.cursor/rules/`, and every other supported agent config. From that point on, any
-coding agent working in this repo reads the skeleton at session start instead of
-scanning raw source files.
+This writes `.rtt/context.txt` (the skeleton) and adds a short instruction to every
+supported agent config file — `CLAUDE.md`, `AGENTS.md`, `.cursor/rules/`, and others.
+The instruction tells the agent to read the skeleton at session start for orientation,
+then work normally from there.
+
+Commit both files. Every collaborator and every future session gets the map automatically.
 
 ```
-# After code changes — regenerate the skeleton without touching agent configs
+# After code changes — regenerate the skeleton
 rtt update .
 
-# If you only want the skeleton file without touching agent configs
-rtt index . --output context.txt
-
-# Show how many tokens you save
+# See how many tokens the skeleton saves vs raw source
 rtt compare .
 ```
 
-**Sample output** for a single file:
+**Sample skeleton output for one file:**
 
 ```
 # rtt/bench.py [python]
@@ -71,7 +101,6 @@ class BenchReport
   def llm_score(self) -> Optional[float]
 def generate_questions(repo: RepoIndex) -> list[BenchQuestion]
 def score_heuristic(questions: list[BenchQuestion], repo: RepoIndex) -> list[QuestionResult]
-def score_llm(questions: list[BenchQuestion], repo: RepoIndex, repo_path: str, sample_size: int) -> list[LLMQuestionResult]
 def run_bench(path: str, use_llm: bool, llm_sample: int) -> BenchReport
 ```
 
@@ -88,7 +117,9 @@ def run_bench(path: str, use_llm: bool, llm_sample: int) -> BenchReport
 | Audit coverage (Python) | **99.9%** (34,454 / 34,480 symbols) |
 | Audit coverage (JavaScript) | **97.9%** (46 / 47 symbols) |
 
-The heuristic bench auto-generates factual questions from the index — parameter names, return types, method lists, imports — and verifies each answer appears in the skeleton. A score of 100% means no structural information was lost in compression.
+The heuristic bench auto-generates factual questions from the index — parameter names,
+return types, method lists, imports — and verifies every answer appears in the skeleton.
+100% means no structural information was lost in compression.
 
 ---
 
@@ -96,18 +127,17 @@ The heuristic bench auto-generates factual questions from the index — paramete
 
 ### `rtt install`
 
-The primary command. Indexes the repo, writes the skeleton to `.rtt/context.txt`, and
-injects instructions into every supported agent config file telling it to read that file
-at the start of each session — before opening any source files.
+Index the repo, write the skeleton to `.rtt/context.txt`, and inject orientation
+instructions into every supported agent config file. Also installs a git pre-commit hook
+that regenerates the skeleton automatically on every commit.
 
 ```
 rtt install .
-rtt install /path/to/repo
 rtt install . --platform claude    # single agent only
 rtt install . --force              # overwrite existing rtt sections
 ```
 
-Supported agents and the files they write to:
+Supported agents:
 
 | Agent | Config file |
 |---|---|
@@ -121,132 +151,106 @@ Supported agents and the files they write to:
 | Aider | `.aider/prompts/conventions.md` |
 | Zed | `.rules` |
 
-Commit `.rtt/context.txt` and the updated config files to your repository. Every
-collaborator and every new session then gets the context automatically.
-
-After code changes, run `rtt update` to regenerate the skeleton without modifying
-the agent config files again.
+The instruction added to each config file tells the agent to read `.rtt/context.txt`
+once at session start for orientation, then work normally. It does not restrict the
+agent from reading source files or using its own retrieval.
 
 ### `rtt update`
 
 Regenerate `.rtt/context.txt` after code changes. Does not touch agent config files.
+The git hook installed by `rtt install` runs this automatically on every commit.
 
 ```
 rtt update .
+rtt update . --diff    # show what symbols changed
 ```
-
-Run this whenever the codebase changes. Commit the updated `.rtt/context.txt` so
-all collaborators and CI environments stay current.
 
 ### `rtt uninstall`
 
-Remove rtt instructions from agent config files.
+Remove rtt instructions from all agent config files.
 
 ```
 rtt uninstall .
-rtt uninstall . --platform cursor   # single agent only
-rtt uninstall . --clean             # also delete .rtt/context.txt
+rtt uninstall . --platform cursor
+rtt uninstall . --clean    # also delete .rtt/context.txt
 ```
 
 ### `rtt index`
 
-Generate the skeleton and print to stdout, or write to a file.
+Generate the skeleton and print to stdout, or write to a file. Useful for piping
+into other tools or building custom workflows.
 
 ```
 rtt index .
 rtt index /path/to/repo --output context.txt
-rtt index . --no-cache
 ```
 
 ### `rtt compare`
 
-Show token reduction statistics for a repo, with a per-file breakdown of the largest files.
+Show token reduction statistics with a per-file breakdown.
 
 ```
 rtt compare .
-rtt compare /path/to/repo --top 20
-```
-
-Compare token counts before and after a specific git commit range:
-
-```
-rtt compare . --diff HEAD~3..HEAD
+rtt compare . --diff HEAD~3..HEAD    # token delta for a git range
 ```
 
 ### `rtt bench`
 
-Measure how much structural information the skeleton retains. Runs entirely locally with no API calls by default.
+Measure how much structural information the skeleton retains.
 
 ```
-rtt bench .
-rtt bench . --show-failing
+rtt bench .                        # heuristic only, free, instant
+rtt bench . --llm --sample 30      # semantic equivalence via Claude
 ```
 
-With `--llm`, sends sampled questions to Claude using full source and skeleton context, then uses a second model as a judge to measure semantic equivalence:
-
-```
-rtt bench . --llm --sample 30
-```
-
-Requires `ANTHROPIC_API_KEY` and `pip install "reducethemtokens[llm]"`.
+The `--llm` mode requires `ANTHROPIC_API_KEY` and `pip install "reducethemtokens[llm]"`.
 
 ### `rtt audit`
 
-Verify extraction accuracy against the raw source. Compares symbols found by `rtt` against a full AST walk of each file to compute coverage, and checks that every extracted signature is syntactically well-formed.
+Verify extraction accuracy: symbols found vs expected, and signature correctness.
 
 ```
 rtt audit .
-rtt audit . --show-passing
+```
+
+### `rtt vs`
+
+Compare token footprint against another repo-indexing tool (currently supports graphify).
+
+```
+pip install graphifyy
+rtt vs .
 ```
 
 ### `rtt view`
 
-Render the skeleton as human-readable markdown and open it in a pager.
+Render the skeleton as markdown and open in a pager.
 
 ```
 rtt view .
 rtt view . --output overview.md
 ```
 
-### `rtt vs`
-
-Compare `rtt`'s token footprint against another repo-indexing tool side by side.
-
-```
-rtt vs .
-```
-
-Currently supports [graphify](https://pypi.org/project/graphifyy/). Install it first:
-
-```
-pip install graphifyy
-rtt vs /path/to/repo
-```
-
 ---
 
 ## Python API
 
-`rtt` is also importable as a library:
-
 ```python
 import rtt
 
-# Index a repo
 repo = rtt.index("/path/to/repo")
 
-print(repo.token_count)          # int — token count of the skeleton
-print(repo.text)                  # str — the full skeleton text
+print(repo.token_count)    # int
+print(repo.text)           # full skeleton as a string
 
 for file in repo.files:
     print(file.path, file.language)
-    print(file.imports)           # list[str] — e.g. ["pathlib.Path", "os"]
+    print(file.imports)    # e.g. ["pathlib.Path", "typing.Optional"]
     for sym in file.symbols:
         print(sym.name, sym.kind, sym.signature)
-        for child in sym.children:   # methods inside a class
+        for child in sym.children:
             print(" ", child.signature)
 
-# Token comparison report
 report = rtt.compare("/path/to/repo")
 print(f"{report.reduction_pct:.1f}% reduction")
 print(f"{report.raw_tokens:,} → {report.compressed_tokens:,} tokens")
@@ -262,16 +266,13 @@ Python, JavaScript, TypeScript, Go, Rust, Java, C, C++, Ruby.
 
 ## How it works
 
-`rtt` parses each file with [tree-sitter](https://tree-sitter.github.io/tree-sitter/) and walks the resulting AST to collect:
+`rtt` parses each file with [tree-sitter](https://tree-sitter.github.io/tree-sitter/)
+and walks the AST to collect top-level definitions: functions, classes, methods, and
+imports. Function bodies are discarded. The output is one line per symbol, indented to
+show class membership, with imports resolved to specific symbols
+(`from pathlib import Path` → `pathlib.Path`).
 
-- Top-level function and class definitions, including those inside `try/except` or conditional blocks
-- Class hierarchies with method signatures
-- Import statements, resolved to the specific symbols being imported (`from pathlib import Path` becomes `pathlib.Path`)
-- First-line docstrings where present
-
-Function bodies are discarded entirely. The output is formatted as indented plain text — one line per symbol — optimized for token density rather than human readability, though it is readable.
-
-Results are cached per-file by content hash, so subsequent runs on large repos are fast.
+Results are cached by file content hash. Subsequent runs on large repos are fast.
 
 ---
 
@@ -284,7 +285,7 @@ pip install -e ".[dev]"
 pytest tests/
 ```
 
-The test suite covers extraction correctness across all supported languages, audit accuracy, and the full benchmark pipeline. 91 tests, no network calls required.
+91 tests. No network calls required.
 
 ---
 

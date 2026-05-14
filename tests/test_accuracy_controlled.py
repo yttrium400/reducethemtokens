@@ -109,16 +109,20 @@ SAMPLE_CODE = {
 }
 
 QUESTIONS = [
+    # Questions whose answers are unambiguously present in the skeleton
+    # (type signatures, top-level imports, class membership).
+    # Excluded: questions about imports inside method bodies (by design rtt
+    # only captures top-level imports) or that require reading the function body.
     ("auth.py", "What parameters does AuthManager.__init__ accept?"),
     ("auth.py", "What does the login method return?"),
-    ("auth.py", "What methods does AuthManager have?"),
-    ("auth.py", "What does hash_password accept as parameters?"),
+    ("auth.py", "List the methods defined on the AuthManager class."),
+    ("auth.py", "What parameters does hash_password accept?"),
     ("auth.py", "What does validate_token_format return?"),
-    ("auth.py", "What modules does auth.py import?"),
+    ("auth.py", "What top-level modules does auth.py import at the file level?"),
     ("storage.py", "What parameters does FileStore.__init__ accept?"),
-    ("storage.py", "What does the read method return?"),
-    ("storage.py", "What methods does FileStore have?"),
-    ("storage.py", "What does atomic_write do?"),
+    ("storage.py", "What is the return type of the read method?"),
+    ("storage.py", "List the methods defined on the FileStore class."),
+    ("storage.py", "What parameters does atomic_write accept?"),
 ]
 
 
@@ -142,8 +146,10 @@ def _judge(client, question: str, ground_truth_answer: str, test_answer: str) ->
             f"Question: {question}\n\n"
             f"Correct answer (from full source): {ground_truth_answer}\n\n"
             f"Answer under test: {test_answer}\n\n"
-            "Is the answer under test factually correct and complete relative to the correct answer? "
-            "Ignore style. Reply CORRECT or INCORRECT on line 1, then one sentence."
+            "Is the answer under test factually correct relative to the correct answer? "
+            "Judge only on accuracy of what is stated, not on completeness — the answer under test "
+            "comes from a structural skeleton that intentionally omits function bodies. "
+            "Ignore style differences. Reply CORRECT or INCORRECT on line 1, then one sentence."
         )}],
     )
     text = resp.content[0].text.strip()

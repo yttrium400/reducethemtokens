@@ -417,7 +417,13 @@ def vs(
         raise typer.Exit(1)
 
     # ── check graphify is available ───────────────────────────────────────────
+    # Also check next to the running Python (covers venv installs not on PATH)
+    import sys
     graphify_bin = shutil.which("graphify")
+    if not graphify_bin:
+        candidate = Path(sys.executable).parent / "graphify"
+        if candidate.exists():
+            graphify_bin = str(candidate)
     if not graphify_bin:
         err_console.print(
             "[red]Error:[/red] 'graphify' not found in PATH.\n"
@@ -430,7 +436,7 @@ def vs(
         repo = extract_repo(resolved, use_cache=False)
         rtt_text = format_text(repo)
         rtt_tokens = count_tokens(rtt_text)
-        rtt_files = repo.file_count
+        rtt_files = len(repo.files)
 
     # ── graphify run ──────────────────────────────────────────────────────────
     out_dir = Path(resolved) / "graphify-out"
@@ -438,7 +444,7 @@ def vs(
 
     with console.status("[dim]Indexing with graphify (this may take a moment)...[/dim]", spinner="dots"):
         result = subprocess.run(
-            [graphify_bin, resolved, "--no-viz"],
+            [graphify_bin, "update", resolved],
             capture_output=True,
             text=True,
             cwd=resolved,
@@ -473,44 +479,59 @@ def vs(
         shutil.rmtree(out_dir)
 
     # ── display results ───────────────────────────────────────────────────────
-    reduction = (1 - rtt_tokens / graphify_primary) * 100 if graphify_primary else 0
-    ratio = graphify_primary / rtt_tokens if rtt_tokens else 0
+    report_tokens = graphify_tokens.get("GRAPH_REPORT.md", 0)
+    json_tokens   = graphify_tokens.get("graph.json", 0)
 
     console.print()
     console.print("[bold]rtt vs graphify — Token Comparison[/bold]")
-    console.print("─" * 54)
+    console.print("─" * 64)
     console.print(f"  Repo:     [dim]{resolved}[/dim]")
     console.print(f"  Files:    {rtt_files}")
     console.print()
 
     table = Table(show_header=True, header_style="bold", box=None)
-    table.add_column("Tool", style="bold")
-    table.add_column("Output", style="dim")
+    table.add_column("Output", style="bold")
     table.add_column("Tokens", justify="right")
+    table.add_column("Notes", style="dim")
 
-    table.add_row("rtt", "skeleton index", f"[green]{rtt_tokens:,}[/green]")
-    table.add_row("graphify", graphify_primary_name, f"{graphify_primary:,}")
-    if len(graphify_tokens) > 1:
-        other = [f"{k}: {v:,}" for k, v in graphify_tokens.items() if k != graphify_primary_name]
-        table.add_row("", f"[dim]{other[0]}[/dim]", "")
+    table.add_row("rtt skeleton index", f"[green]{rtt_tokens:,}[/green]",
+                  "complete API surface — every signature & import")
+
+    if report_tokens:
+        diff_report = (1 - rtt_tokens / report_tokens) * 100
+        dir_str = f"rtt is {abs(diff_report):.0f}% {'smaller' if diff_report > 0 else 'larger'}"
+        table.add_row("graphify GRAPH_REPORT.md", f"{report_tokens:,}",
+                      f"high-level summary only — {dir_str}")
+
+    if json_tokens:
+        diff_json = (1 - rtt_tokens / json_tokens) * 100
+        dir_str2 = f"rtt is {abs(diff_json):.0f}% {'smaller' if diff_json > 0 else 'larger'}"
+        table.add_row("graphify graph.json", f"{json_tokens:,}",
+                      f"full graph (impractical for LLMs) — {dir_str2}")
 
     console.print(table)
     console.print()
 
-    color = "green" if reduction > 0 else "red"
-    if reduction > 0:
+    if report_tokens:
+        if rtt_tokens < report_tokens:
+            console.print(
+                f"  vs GRAPH_REPORT.md: [bold green]rtt is {(1 - rtt_tokens/report_tokens)*100:.0f}% smaller[/bold green] "
+                f"and retains full structural detail"
+            )
+        else:
+            console.print(
+                f"  vs GRAPH_REPORT.md: graphify's report is {(1 - report_tokens/rtt_tokens)*100:.0f}% smaller "
+                f"[dim](high-level summary — rtt preserves complete API surface)[/dim]"
+            )
+    if json_tokens and rtt_tokens < json_tokens:
+        ratio = json_tokens / rtt_tokens
         console.print(
-            f"  [bold green]rtt uses {reduction:.1f}% fewer tokens[/bold green] "
-            f"([dim]{ratio:.1f}x smaller than graphify[/dim])"
-        )
-    else:
-        console.print(
-            f"  [bold red]graphify uses {abs(reduction):.1f}% fewer tokens[/bold red] "
-            f"([dim]{1/ratio:.1f}x smaller than rtt[/dim])"
+            f"  vs graph.json:      [bold green]rtt is {ratio:.0f}x smaller[/bold green] "
+            f"than the full graphify graph"
         )
 
     if not no_cleanup and not pre_existing:
-        console.print(f"  [dim]graphify-out/ removed (use --no-cleanup to keep)[/dim]")
+        console.print(f"\n  [dim]graphify-out/ removed (use --no-cleanup to keep)[/dim]")
     console.print()
 
 

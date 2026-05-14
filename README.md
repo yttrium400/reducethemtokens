@@ -33,11 +33,21 @@ pip install "reducethemtokens[llm]"
 ## Quick start
 
 ```
-# Print a skeleton of the current repo to stdout
-rtt index .
+# Index the repo and wire it into every agent config automatically
+rtt install .
+```
 
-# Write the skeleton to a file
-rtt index /path/to/repo --output skeleton.txt
+That single command writes `.rtt/context.txt` and updates `CLAUDE.md`, `AGENTS.md`,
+`.cursor/rules/`, and every other supported agent config. From that point on, any
+coding agent working in this repo reads the skeleton at session start instead of
+scanning raw source files.
+
+```
+# Re-run after code changes to keep the skeleton current
+rtt install . --force
+
+# If you only want the skeleton file without touching agent configs
+rtt index . --output context.txt
 
 # Show how many tokens you save
 rtt compare .
@@ -78,6 +88,48 @@ The heuristic bench auto-generates factual questions from the index — paramete
 ---
 
 ## Commands
+
+### `rtt install`
+
+The primary command. Indexes the repo, writes the skeleton to `.rtt/context.txt`, and
+injects instructions into every supported agent config file telling it to read that file
+at the start of each session — before opening any source files.
+
+```
+rtt install .
+rtt install /path/to/repo
+rtt install . --platform claude    # single agent only
+rtt install . --force              # overwrite existing rtt sections
+```
+
+Supported agents and the files they write to:
+
+| Agent | Config file |
+|---|---|
+| Claude Code | `CLAUDE.md` |
+| Cursor | `.cursor/rules/rtt.mdc` |
+| Windsurf | `.windsurfrules` |
+| Codex / OpenAI | `AGENTS.md` |
+| GitHub Copilot | `.github/copilot-instructions.md` |
+| Kiro | `.kiro/steering/rtt.md` |
+| Gemini CLI | `GEMINI.md` |
+| Aider | `.aider/prompts/conventions.md` |
+| Zed | `.rules` |
+
+Commit `.rtt/context.txt` and the updated config files to your repository. Every
+collaborator and every new session then gets the context automatically.
+
+Re-run `rtt install` after significant code changes to keep the skeleton current.
+
+### `rtt uninstall`
+
+Remove rtt instructions from agent config files.
+
+```
+rtt uninstall .
+rtt uninstall . --platform cursor   # single agent only
+rtt uninstall . --clean             # also delete .rtt/context.txt
+```
 
 ### `rtt index`
 

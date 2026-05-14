@@ -363,6 +363,113 @@ def audit(
 
 
 @app.command()
+def install(
+    path: str = typer.Argument(".", help="Path to repo or directory"),
+    platform: Optional[str] = typer.Option(None, "--platform", "-p",
+        help="Target platform: claude, cursor, windsurf, codex, copilot, kiro, gemini, aider, zed. Default: all."),
+    force: bool = typer.Option(False, "--force", help="Overwrite existing rtt sections"),
+):
+    """Index the repo and inject context instructions into agent config files.
+
+    Writes the skeleton to .rtt/context.txt, then adds a section to each
+    agent's config file instructing it to read that file at session start —
+    before opening any source files.
+
+    Supports: Claude Code (CLAUDE.md), Cursor (.cursor/rules/), Windsurf
+    (.windsurfrules), Codex/OpenAI (AGENTS.md), GitHub Copilot
+    (.github/copilot-instructions.md), Kiro, Gemini CLI, Aider, Zed.
+    """
+    from rtt.extractor import extract_repo, compare_repo
+    from rtt.formatter import format_text
+    from rtt.tokenizer import count_tokens
+    from rtt.installer import install as do_install, PLATFORMS, PLATFORM_BY_NAME
+
+    resolved = _resolve_path(path)
+
+    # Validate platform name early
+    if platform and platform not in PLATFORM_BY_NAME:
+        valid = ", ".join(p.name for p in PLATFORMS)
+        err_console.print(f"[red]Error:[/red] Unknown platform '{platform}'. Valid: {valid}")
+        raise typer.Exit(1)
+
+    with console.status("[dim]Indexing repo...[/dim]", spinner="dots"):
+        repo    = extract_repo(resolved, use_cache=False)
+        text    = format_text(repo)
+        compressed = count_tokens(text)
+
+    with console.status("[dim]Counting raw tokens...[/dim]", spinner="dots"):
+        report  = compare_repo(resolved)
+        raw     = report.raw_tokens
+        reduction = report.reduction_pct
+
+    # Write skeleton file
+    skel_dir  = Path(resolved) / ".rtt"
+    skel_file = skel_dir / "context.txt"
+    skel_dir.mkdir(exist_ok=True)
+    skel_file.write_text(text, encoding="utf-8")
+    console.print(f"[green]Skeleton written:[/green] .rtt/context.txt  ({compressed:,} tokens)")
+
+    # Inject into agent configs
+    platform_names = [platform] if platform else None
+    results = do_install(resolved, platform_names, compressed, raw, reduction, force=force)
+
+    console.print()
+    for r in results:
+        if r.action == "created":
+            console.print(f"  [green]created[/green]  {r.config_file}")
+        elif r.action == "updated":
+            console.print(f"  [green]updated[/green]  {r.config_file}")
+        else:
+            console.print(f"  [dim]skipped[/dim]  {r.config_file}  [dim]({r.note})[/dim]")
+
+    installed = [r for r in results if r.action != "skipped"]
+    console.print()
+    if installed:
+        console.print(
+            f"[bold green]Installed to {len(installed)} config file(s).[/bold green] "
+            f"Agents will read .rtt/context.txt at session start."
+        )
+        console.print(
+            f"[dim]Re-run after code changes: rtt install {path if path != '.' else ''}[/dim]"
+        )
+    else:
+        console.print("[yellow]Nothing changed.[/yellow] Use --force to overwrite existing sections.")
+
+
+@app.command()
+def uninstall(
+    path: str = typer.Argument(".", help="Path to repo or directory"),
+    platform: Optional[str] = typer.Option(None, "--platform", "-p",
+        help="Remove from a specific platform only. Default: all."),
+    clean: bool = typer.Option(False, "--clean", help="Also delete .rtt/context.txt"),
+):
+    """Remove rtt instructions from agent config files."""
+    from rtt.installer import uninstall as do_uninstall, PLATFORM_BY_NAME, PLATFORMS
+
+    resolved = _resolve_path(path)
+
+    if platform and platform not in PLATFORM_BY_NAME:
+        valid = ", ".join(p.name for p in PLATFORMS)
+        err_console.print(f"[red]Error:[/red] Unknown platform '{platform}'. Valid: {valid}")
+        raise typer.Exit(1)
+
+    platform_names = [platform] if platform else None
+    results = do_uninstall(resolved, platform_names, remove_skeleton=clean)
+
+    if not results:
+        console.print("[yellow]No rtt sections found in any config files.[/yellow]")
+        return
+
+    for r in results:
+        console.print(f"  [green]cleaned[/green]  {r.config_file}")
+
+    if clean:
+        console.print(f"  [green]removed[/green]  .rtt/context.txt")
+
+    console.print(f"\n[bold green]Uninstalled from {len(results)} file(s).[/bold green]")
+
+
+@app.command()
 def view(
     path: str = typer.Argument(".", help="Path to repo or directory"),
     output: Optional[str] = typer.Option(None, "--output", "-o", help="Write markdown to file instead of pager"),

@@ -1,5 +1,9 @@
 # rtt — reducethemtokens
 
+[![PyPI](https://img.shields.io/pypi/v/reducethemtokens)](https://pypi.org/project/reducethemtokens/)
+[![Python](https://img.shields.io/pypi/pyversions/reducethemtokens)](https://pypi.org/project/reducethemtokens/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 Compress any code repository into a compact structural skeleton for use as LLM context.
 
 Instead of sending tens of thousands of lines of source code to a language model, `rtt` extracts only what matters — function signatures, class hierarchies, method lists, and imports — and formats it as dense, readable plain text. The result is typically 85–95% smaller than the raw codebase while retaining 100% of the structural information a model needs to understand your API.

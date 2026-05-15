@@ -97,3 +97,31 @@ def test_swift_extraction_fixture():
 
     service = next(s for s in fi.symbols if s.name == "Service")
     assert service.children[0].signature == "func run(count: Int) async throws -> Void"
+
+
+def test_kotlin_extraction_fixture():
+    path = Path(__file__).parent / "fixtures" / "sample.kt"
+    fi = _extract_file(str(path))
+    assert fi is not None
+    assert fi.language == "kotlin"
+    assert "kotlin.collections.List" in fi.imports
+    assert "java.time.Instant" in fi.imports
+
+    names = [s.name for s in fi.symbols]
+    assert "Greeter" in names
+    assert "User" in names
+    assert "Result" in names
+    assert "Registry" in names
+    assert "topLevel" in names
+
+    greeter = next(s for s in fi.symbols if s.name == "Greeter")
+    assert greeter.kind == "interface"
+    assert greeter.children[0].signature == "fun greet(name: String): String"
+
+    user = next(s for s in fi.symbols if s.name == "User")
+    assert user.kind == "class"
+    assert user.children[0].signature == "override fun greet(name: String): String"
+
+    registry = next(s for s in fi.symbols if s.name == "Registry")
+    assert registry.kind == "object"
+    assert registry.children[0].signature == "fun lookup(id: String): User?"

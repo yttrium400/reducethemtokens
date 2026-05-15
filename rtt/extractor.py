@@ -214,6 +214,13 @@ def _extract_imports(root: Node, source: bytes, lang_name: str, _lang_mod) -> li
                         add(text(child).strip())
                         break
 
+        elif lang_name == "kotlin":
+            if t == "import":
+                for child in node.children:
+                    if child.type == "qualified_identifier":
+                        add(text(child).strip())
+                        break
+
         elif lang_name in ("c", "cpp"):
             if t == "preproc_include":
                 for child in node.children:
@@ -353,6 +360,8 @@ def _node_to_symbol(node: Node, source: bytes, lang_name: str, lang_mod, depth: 
             sym = _extract_rust_symbol(node, source, lang_mod)
         elif lang_name == "java":
             sym = _extract_java_symbol(node, source, lang_mod)
+        elif lang_name == "kotlin":
+            sym = _extract_kotlin_symbol(node, source, lang_mod)
         elif lang_name in ("c", "cpp"):
             sym = _extract_c_symbol(node, source, lang_mod)
         elif lang_name == "ruby":
@@ -364,16 +373,16 @@ def _node_to_symbol(node: Node, source: bytes, lang_name: str, lang_mod, depth: 
 
     if (
         sym
-        and sym.kind in ("class", "struct", "enum", "protocol", "extension")
+        and sym.kind in ("class", "struct", "enum", "protocol", "extension", "interface", "object")
         and depth == 0
     ):
         # Unwrap wrapper nodes to reach the actual class definition node whose
         # "block" / "class_body" child holds the class body.
-        # Handles: @dataclass class Foo  →  decorated_definition → class_definition
-        #          export class Foo      →  export_statement     → class_declaration
+        # Handles: @dataclass class Foo  ->  decorated_definition -> class_definition
+        #          export class Foo      ->  export_statement     -> class_declaration
         class_node = node
         _WRAPPER_TYPES = ("decorated_definition", "export_statement")
-        _CLASS_TYPES   = ("class_definition", "class_declaration", "protocol_declaration")
+        _CLASS_TYPES   = ("class_definition", "class_declaration", "protocol_declaration", "object_declaration")
         if node.type in _WRAPPER_TYPES:
             for child in node.children:
                 if child.type in _CLASS_TYPES:
@@ -604,6 +613,39 @@ def _extract_java_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol
             return None
         name = source[name_node.start_byte:name_node.end_byte].decode()
         return Symbol(name=name, kind="interface", signature=f"interface {name}")
+
+    return None
+
+
+def _kotlin_kind(node: Node) -> str:
+    if node.type == "object_declaration":
+        return "object"
+    for child in node.children:
+        if child.type in ("class", "interface"):
+            return child.type
+    return "class"
+
+
+def _extract_kotlin_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol]:
+    if node.type == "function_declaration":
+        name_node = node.child_by_field_name("name")
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        signature = lang_mod.declaration_signature(source, node)
+        return Symbol(name=name, kind="function", signature=signature)
+
+    if node.type in ("class_declaration", "object_declaration"):
+        name_node = node.child_by_field_name("name")
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        kind = _kotlin_kind(node)
+        return Symbol(
+            name=name,
+            kind=kind,
+            signature=lang_mod.extract_class_signature(source, node),
+        )
 
     return None
 

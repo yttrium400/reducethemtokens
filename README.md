@@ -6,6 +6,8 @@
 
 Give any LLM a complete map of your codebase in a single, cheap read.
 
+![rtt demo](demo.gif)
+
 `rtt` extracts every file's imports, function signatures, class hierarchies, and method
 lists into a compact plain-text skeleton — typically 90% smaller than the raw source —
 and wires it into your agent's config so the map is available from the first message of

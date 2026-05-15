@@ -1,0 +1,72 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Commands
+
+```bash
+# Install for development
+pip install -e ".[dev]"          # core + test deps
+pip install -e ".[dev,llm]"      # also installs anthropic for accuracy tests
+
+# Run tests
+pytest tests/                    # all tests (91, ~0.3s)
+pytest tests/test_extractor.py   # single file
+pytest tests/ -k "test_python"   # single test by name
+
+# Controlled accuracy test (requires API key)
+ANTHROPIC_API_KEY=... pytest tests/test_accuracy_controlled.py -v -s
+
+# Build and publish
+python -m build
+twine upload dist/*
+
+# Use the CLI from source
+rtt index .
+rtt install .
+rtt bench .
+```
+
+## Architecture
+
+The pipeline is: **extractor → formatter → CLI/installer**.
+
+### Data model (`rtt/__init__.py`)
+Three dataclasses flow through everything: `Symbol` (name, kind, signature, children), `FileIndex` (path, language, imports, symbols), `RepoIndex` (list of FileIndex). `CompareReport` is only used by `rtt compare`.
+
+### Extraction (`rtt/extractor.py`)
+`extract_repo()` is the main entry point. It walks the directory, calls `_extract_file()` per file, applies include/exclude/no_tests filters, then optionally trims to a token budget via `_trim_to_budget()`.
+
+`_extract_file()` parses with tree-sitter and delegates to language-specific functions (`_extract_python_symbol`, `_extract_js_symbol`, etc). Import extraction is separate from symbol extraction and only captures **top-level imports** — imports inside function bodies are intentionally excluded.
+
+### Language modules (`rtt/languages/`)
+Each module (`python_lang.py`, `javascript_lang.py`, etc.) provides `extract_fn_signature()` and `extract_class_signature()` — functions that format a tree-sitter node into a readable signature string. Adding a new language means adding a module here, registering it in `languages/__init__.py` and `languages/registry.py`, and adding extraction logic in `extractor.py`.
+
+### JS/TS edge cases
+Two patterns require special handling in `_iter_toplevel_nodes()`:
+1. **IIFE wrappers** `(function($){...})(jQuery)` — handled by `_iter_js_iife_body()`
+2. **Bare block statements** `{ function foo(){} }` — tree-sitter parses these as `ERROR` or `statement_block` nodes; children are yielded transparently
+
+### Formatter (`rtt/formatter.py`)
+`format_text()` produces the compact skeleton. `format_text_with_header()` prepends a staleness header (timestamp, file count, token count) — this is what gets written to `.rtt/context.txt`.
+
+### Cache (`rtt/cache.py`)
+Content-hash cache at `.rtt-cache/index.json`, keyed by absolute path + SHA-256. Always bypassed (`use_cache=False`) in `rtt install` and `rtt update`.
+
+### Installer (`rtt/installer.py`)
+`install()` injects a `<!-- rtt:start --> ... <!-- rtt:end -->` block into each agent config file. `PLATFORMS` defines the 9 supported agents. Re-running with `--force` replaces the block cleanly.
+
+### Token budget (`_trim_to_budget`)
+Non-test files score `10_000 + n_symbols`; test files score `0 + n_symbols`. Files are greedily selected in priority order. Test detection uses path markers: `test`, `spec`, `fixture`, `mock`, `__pycache__`.
+
+## Tests
+
+- `tests/test_extractor.py` — per-language extraction, uses `_extract_file()` on inline tempfile code
+- `tests/test_accuracy.py` — heuristic bench on fixture files in `tests/fixtures/`
+- `tests/test_accuracy_controlled.py` — LLM-judge test, skipped without `ANTHROPIC_API_KEY`
+- `tests/fixtures/` — canonical multi-language samples used across test files
+
+## Notes
+
+- The URLs in `pyproject.toml` still reference the old repo name (`reducethemtokens-rtt-`). Update them to `https://github.com/yttrium400/reducethemtokens` when next bumping the version.
+- `rtt/__init__.py` exposes the public Python API (`rtt.index()`, `rtt.compare()`). Keep this in sync when adding parameters to `extract_repo()`.

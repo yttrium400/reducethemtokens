@@ -4,6 +4,17 @@ All notable changes to this project are documented here.
 
 ---
 
+## [0.6.0] - 2026-05-16
+
+### Added
+- Lua language support (`.lua`) - functions, local functions, table-as-module pattern. Contributed by @qianmao1989.
+- Dart language support (`.dart`) - classes, mixins, enums, extensions, top-level functions. Contributed by @qianmao1989.
+- Scala language support (`.scala`) - classes, traits, objects, case classes, functions. Contributed by @qianmao1989.
+- `--format json` flag on `rtt index` - outputs structured JSON instead of plain text, useful for piping into other tools. Contributed by @qianmao1989.
+- Smart platform auto-detection for `rtt install` - detects which AI agents are in use and only installs for those. Use `--all` to override. Contributed by @qianmao1989.
+
+---
+
 ## [0.5.2] - 2026-05-16
 
 ### Added

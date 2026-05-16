@@ -125,7 +125,8 @@ def _instruction_block(
 # ── read / write helpers ──────────────────────────────────────────────────────
 
 def _has_rtt_section(text: str) -> bool:
-    return _START in text
+    lines = text.splitlines()
+    return any(l.strip() == _START for l in lines) and any(l.strip() == _END for l in lines)
 
 
 def _replace_rtt_section(text: str, new_block: str) -> str:

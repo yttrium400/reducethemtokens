@@ -11,6 +11,8 @@ EXTENSION_MAP = {
     ".go": "go",
     ".rs": "rust",
     ".java": "java",
+    ".kt": "kotlin",
+    ".kts": "kotlin",
     ".c": "c",
     ".h": "c",
     ".cpp": "cpp",
@@ -18,6 +20,7 @@ EXTENSION_MAP = {
     ".cxx": "cpp",
     ".hpp": "cpp",
     ".rb": "ruby",
+    ".swift": "swift",
 }
 
 LANGUAGE_MODULES = {
@@ -28,9 +31,11 @@ LANGUAGE_MODULES = {
     "go":         "tree_sitter_go",
     "rust":       "tree_sitter_rust",
     "java":       "tree_sitter_java",
+    "kotlin":     "tree_sitter_kotlin",
     "c":          "tree_sitter_c",
     "cpp":        "tree_sitter_cpp",
     "ruby":       "tree_sitter_ruby",
+    "swift":      "tree_sitter_swift",
 }
 
 # Modules that don't expose a generic language() - map to their actual function name.

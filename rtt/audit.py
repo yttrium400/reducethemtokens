@@ -50,6 +50,11 @@ SYMBOL_NODE_TYPES: dict[str, dict[str, str]] = {
         "interface_declaration": "interface",
         "constructor_declaration": "constructor",
     },
+    "kotlin": {
+        "function_declaration": "function",
+        "class_declaration": "class",
+        "object_declaration": "object",
+    },
     "c": {
         "function_definition": "function",
         "struct_specifier": "struct",
@@ -63,6 +68,12 @@ SYMBOL_NODE_TYPES: dict[str, dict[str, str]] = {
         "method": "method",
         "class": "class",
         "module": "module",
+    },
+    "swift": {
+        "function_declaration": "function",
+        "protocol_function_declaration": "function",
+        "class_declaration": "type",
+        "protocol_declaration": "protocol",
     },
 }
 
@@ -79,9 +90,14 @@ _FUNCTION_BODY_TYPES: dict[str, frozenset[str]] = {
     "go":         frozenset({"function_declaration", "method_declaration", "func_literal"}),
     "rust":       frozenset({"function_item"}),
     "java":       frozenset({"method_declaration", "constructor_declaration"}),
+    "kotlin":     frozenset({"function_declaration"}),
     "c":          frozenset({"function_definition"}),
     "cpp":        frozenset({"function_definition"}),
     "ruby":       frozenset({"method", "singleton_method"}),
+    "swift":      frozenset({
+        "function_declaration",
+        "protocol_function_declaration",
+    }),
 }
 
 

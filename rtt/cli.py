@@ -37,9 +37,16 @@ def index(
         help="Trim output to fit within this token budget, dropping low-priority files first."),
     no_tests: bool = typer.Option(False, "--no-tests",
         help="Exclude test/spec/fixture files."),
+    format: str = typer.Option("text", "--format", "-f",
+        help="Output format: text (default) or json."),
 ):
     """Generate a compact skeleton index of the repo and print to stdout."""
     from rtt.extractor import extract_repo
+    from rtt.formatter import format_json
+
+    if format not in ("text", "json"):
+        err_console.print(f"[red]Error:[/red] Unknown format '{format}'. Valid: text, json")
+        raise typer.Exit(1)
 
     resolved = _resolve_path(path)
 
@@ -48,7 +55,11 @@ def index(
                             include=include, exclude=exclude, max_tokens=max_tokens,
                             no_tests=no_tests)
 
-    text = repo.text
+    if format == "json":
+        text = format_json(repo)
+    else:
+        text = repo.text
+
     tokens = repo.token_count
     dropped = getattr(repo, "_dropped", 0)
 

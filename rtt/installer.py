@@ -41,6 +41,7 @@ PLATFORMS: list[Platform] = [
     Platform("kiro",     "Kiro",                ".kiro/steering/rtt.md",               True,  "markdown"),
     Platform("gemini",   "Gemini CLI",          "GEMINI.md",                           True,  "markdown"),
     Platform("aider",    "Aider",               ".aider/prompts/conventions.md",       True,  "markdown"),
+    Platform("continue", "Continue.dev",        ".continue/rules/rtt.md",              True,  "markdown"),
     Platform("zed",      "Zed",                 ".rules",                              True,  "markdown"),
 ]
 

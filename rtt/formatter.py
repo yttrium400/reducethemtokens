@@ -1,5 +1,7 @@
 from __future__ import annotations
 import datetime
+import json
+from dataclasses import asdict
 from rtt import RepoIndex, FileIndex, Symbol
 
 
@@ -11,6 +13,12 @@ def format_text(repo: RepoIndex) -> str:
         if text.strip():
             parts.append(text)
     return "\n".join(parts)
+
+
+def format_json(repo: RepoIndex) -> str:
+    """Serialize the repo index as structured JSON."""
+    data = asdict(repo)
+    return json.dumps(data, indent=2, ensure_ascii=False)
 
 
 def format_text_with_header(repo: RepoIndex, token_count: int) -> str:

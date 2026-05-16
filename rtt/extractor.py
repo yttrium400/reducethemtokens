@@ -321,6 +321,11 @@ def _iter_toplevel_nodes(root: Node, lang_name: str):
                 # Bare block statements { ... } and ERROR recovery nodes -
                 # both used by Django-style JS that wraps code in a top-level block
                 yield from child.children
+        elif lang_name == "csharp" and child.type == "namespace_declaration":
+            # C# namespaces wrap all declarations — look inside their declaration_list
+            body = child.child_by_field_name("body")
+            if body:
+                yield from body.children
 
 
 def _iter_inside_transparent(node: Node, depth: int):

@@ -204,6 +204,7 @@ Supported agents:
 | Gemini CLI | `GEMINI.md` |
 | Aider | `.aider/prompts/conventions.md` |
 | Zed | `.rules` |
+| Continue.dev | `.continue/rules/rtt.md` |
 
 The instruction added to each config file tells the agent to read `.rtt/context.txt`
 once at session start for orientation, then work normally. It does not restrict the

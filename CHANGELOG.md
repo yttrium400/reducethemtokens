@@ -4,6 +4,14 @@ All notable changes to this project are documented here.
 
 ---
 
+## [Unreleased]
+
+### Added
+- Swift language support (`.swift`) - functions, classes, structs, protocols, enums, extensions. Contributed by @nvphungdev.
+- Kotlin language support (`.kt`, `.kts`) - functions, classes, interfaces, objects, data classes, sealed classes. Contributed by @nvphungdev.
+
+---
+
 ## [0.4.1] - 2026-05-15
 
 ### Fixed
@@ -53,6 +61,7 @@ All notable changes to this project are documented here.
 ### Added
 - Initial release.
 - `rtt index`: extract imports, function signatures, class hierarchies, and method lists from Python, JavaScript, TypeScript, Go, Rust, Java, C, C++, and Ruby using tree-sitter.
+
 - `rtt compare`: show token reduction stats with per-file breakdown.
 - `rtt bench`: heuristic benchmark measuring information retention (parameter names, return types, method lists, imports).
 - `rtt audit`: symbol coverage and signature correctness verification.

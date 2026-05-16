@@ -399,7 +399,7 @@ print(f"{report.raw_tokens:,} → {report.compressed_tokens:,} tokens")
 
 ## Supported languages
 
-Python, JavaScript, TypeScript, Go, Rust, Java, C, C++, Ruby.
+Python, JavaScript, TypeScript, Go, Rust, Java, C, C++, Ruby, Swift, Kotlin.
 
 ---
 

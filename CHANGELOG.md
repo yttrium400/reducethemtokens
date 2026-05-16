@@ -4,6 +4,13 @@ All notable changes to this project are documented here.
 
 ---
 
+## [0.5.1] - 2026-05-16
+
+### Changed
+- Minimum Python version raised to 3.10. tree-sitter 0.25.x (required for Rust and Swift grammar ABI 15) does not support Python 3.9.
+
+---
+
 ## [0.5.0] - 2026-05-16
 
 ### Added

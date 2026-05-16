@@ -4,6 +4,13 @@ All notable changes to this project are documented here.
 
 ---
 
+## [0.6.1] - 2026-05-16
+
+### Fixed
+- `rtt install` no longer falsely skips config files that mention `<!-- rtt:start -->` in documentation or comments. The check now requires the markers to appear as standalone lines.
+
+---
+
 ## [0.6.0] - 2026-05-16
 
 ### Added

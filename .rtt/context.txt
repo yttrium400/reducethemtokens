@@ -1,4 +1,4 @@
-# rtt index | generated 2026-05-16 21:24 | 42 files | 7728 tokens
+# rtt index | generated 2026-05-16 21:25 | 42 files | 7728 tokens
 # If this looks outdated, ask the user to run: rtt update
 # rtt/__init__.py [python]
 imports: dataclasses.dataclass, dataclasses.field, typing.Optional

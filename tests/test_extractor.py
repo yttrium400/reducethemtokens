@@ -179,3 +179,20 @@ def test_lua_extraction_fixture():
 
     color = next(s for s in fi.symbols if s.name == "Color")
     assert color.kind == "enum"
+
+
+def test_dart_extraction_fixture():
+    path = Path(__file__).parent / "fixtures" / "sample.dart"
+    fi = _extract_file(str(path))
+    assert fi is not None
+    assert fi.language == "dart"
+    assert any("io" in i for i in fi.imports)
+    assert any("convert" in i for i in fi.imports)
+
+    names = [s.name for s in fi.symbols]
+    assert "Animal" in names
+    assert "Dog" in names
+    assert "Flyable" in names
+    assert "Color" in names
+    assert "topLevel" in names
+    assert "add" in names

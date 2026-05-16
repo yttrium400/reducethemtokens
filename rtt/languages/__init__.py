@@ -12,6 +12,7 @@ from rtt.languages import (
     swift_lang,
     lua_lang,
     csharp_lang,
+    dart_lang,
 )
 
 LANG_MODULES = {
@@ -29,4 +30,5 @@ LANG_MODULES = {
     "swift": swift_lang,
     "lua": lua_lang,
     "csharp": csharp_lang,
+    "dart": dart_lang,
 }

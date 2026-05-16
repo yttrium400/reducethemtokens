@@ -284,6 +284,28 @@ def _extract_imports(root: Node, source: bytes, lang_name: str, _lang_mod) -> li
             elif t == "function_call":
                 _extract_lua_require(node)
 
+        elif lang_name == "dart":
+            if t == "import_or_export":
+                def find_uri(n):
+                    if n.type == "uri":
+                        return n
+                    for child in n.children:
+                        result = find_uri(child)
+                        if result:
+                            return result
+                    return None
+
+                uri_node = find_uri(node)
+                if uri_node:
+                    uri_text = text(uri_node)
+                    uri_text = uri_text.strip(chr(39) + chr(34))
+                    for prefix in ("dart:", "package:"):
+                        if uri_text.startswith(prefix):
+                            uri_text = uri_text[len(prefix):]
+                    if uri_text.endswith('.dart'):
+                        uri_text = uri_text[:-5]
+                    add_module(uri_text)
+
         if len(result) >= 30:
             break
 
@@ -417,12 +439,14 @@ def _node_to_symbol(node: Node, source: bytes, lang_name: str, lang_mod, depth: 
             sym = _extract_csharp_symbol(node, source, lang_mod)
         elif lang_name == "lua":
             sym = _extract_lua_symbol(node, source, lang_mod)
+        elif lang_name == "dart":
+            sym = _extract_dart_symbol(node, source, lang_mod)
     except Exception:
         return None
 
     if (
         sym
-        and sym.kind in ("class", "struct", "enum", "protocol", "extension", "interface", "object")
+        and sym.kind in ("class", "struct", "enum", "protocol", "extension", "interface", "object", "trait", "mixin")
         and depth == 0
     ):
         # Unwrap wrapper nodes to reach the actual class definition node whose
@@ -431,7 +455,7 @@ def _node_to_symbol(node: Node, source: bytes, lang_name: str, lang_mod, depth: 
         #          export class Foo      ->  export_statement     -> class_declaration
         class_node = node
         _WRAPPER_TYPES = ("decorated_definition", "export_statement")
-        _CLASS_TYPES   = ("class_definition", "class_declaration", "protocol_declaration", "object_declaration")
+        _CLASS_TYPES   = ("class_definition", "class_declaration", "protocol_declaration", "object_declaration", "trait_declaration")
         if node.type in _WRAPPER_TYPES:
             for child in node.children:
                 if child.type in _CLASS_TYPES:
@@ -447,6 +471,8 @@ def _node_to_symbol(node: Node, source: bytes, lang_name: str, lang_mod, depth: 
                 "protocol_body",
                 "declaration_list",
                 "body",
+                "extension_body",
+                "mixin_body",
             ],
         )
         if body:
@@ -1019,4 +1045,100 @@ def _extract_lua_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol]
                                     params_node = expr.child_by_field_name("parameters")
                                     params = source[params_node.start_byte:params_node.end_byte].decode() if params_node else "()"
                                     return Symbol(name=name, kind="function", signature=f"local {name} = function{params}")
+    return None
+
+def _extract_dart_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol]:
+    """Extract a Dart symbol from a top-level node."""
+    t = node.type
+
+    # function_signature or method_signature (abstract methods)
+    if t in ("function_signature", "method_signature"):
+        name_node = node.child_by_field_name("name")
+        if not name_node:
+            # method_signature wraps function_signature
+            for child in node.children:
+                if child.type == "function_signature":
+                    name_node = child.child_by_field_name("name")
+                    if name_node:
+                        break
+        if not name_node:
+            for child in node.children:
+                if child.type == "identifier":
+                    name_node = child
+                    break
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        sig = source[node.start_byte:node.end_byte].decode().strip()
+        return Symbol(name=name, kind="function", signature=sig)
+
+    # getter_signature (Dart getters like `String get name`)
+    if t == "getter_signature":
+        name_node = node.child_by_field_name("name")
+        if not name_node:
+            for child in node.children:
+                if child.type == "identifier":
+                    name_node = child
+                    break
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        sig = source[node.start_byte:node.end_byte].decode().strip()
+        return Symbol(name=name, kind="property", signature=sig)
+
+    # declaration (abstract methods, constructors, class members)
+    if t == "declaration":
+        # For class members, the name is on the inner function_signature/getter_signature
+        inner_kind = "function"
+        name_node = node.child_by_field_name("name")
+        if not name_node:
+            for child in node.children:
+                if child.type in ("function_signature", "getter_signature", "method_signature"):
+                    if child.type == "getter_signature":
+                        inner_kind = "property"
+                    name_node = child.child_by_field_name("name")
+                    if name_node:
+                        break
+        if not name_node:
+            for child in node.children:
+                if child.type == "identifier":
+                    name_node = child
+                    break
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        end_byte = node.end_byte
+        for child in node.children:
+            if child.type in ("function_body", "block"):
+                end_byte = child.start_byte
+                break
+        sig = source[node.start_byte:end_byte].decode().strip()
+        return Symbol(name=name, kind=inner_kind, signature=sig)
+
+    # class_definition, mixin_declaration, enum_declaration, extension_declaration
+    if t in ("class_definition", "mixin_declaration", "enum_declaration", "extension_declaration"):
+        name_node = node.child_by_field_name("name")
+        if not name_node:
+            for child in node.children:
+                if child.type == "identifier":
+                    name_node = child
+                    break
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        end_byte = node.end_byte
+        for child in node.children:
+            if child.type in ("class_body", "enum_body", "extension_body", "mixin_body"):
+                end_byte = child.start_byte
+                break
+        sig = source[node.start_byte:end_byte].decode().strip()
+        sig = " ".join(sig.split())
+        kind_map = {
+            "class_definition": "class",
+            "mixin_declaration": "mixin",
+            "enum_declaration": "enum",
+            "extension_declaration": "extension",
+        }
+        return Symbol(name=name, kind=kind_map.get(t, "class"), signature=sig)
+
     return None

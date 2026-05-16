@@ -23,6 +23,7 @@ EXTENSION_MAP = {
     ".swift": "swift",
     ".lua": "lua",
     ".cs": "csharp",
+    ".dart": "dart",
 }
 
 LANGUAGE_MODULES = {
@@ -40,6 +41,7 @@ LANGUAGE_MODULES = {
     "swift":      "tree_sitter_swift",
     "lua":        "tree_sitter_lua",
     "csharp":     "tree_sitter_c_sharp",
+    "dart":       "tree_sitter_language_pack",
 }
 
 # Modules that don't expose a generic language() - map to their actual function name.
@@ -64,4 +66,9 @@ def get_ts_language(lang_name: str):
         fn_name = _LANGUAGE_FN.get(lang_name, "language")
         return Language(getattr(mod, fn_name)())
     except (ImportError, AttributeError, Exception):
-        return None
+        # Fallback: try tree_sitter_language_pack
+        try:
+            from tree_sitter_language_pack import get_language
+            return get_language(lang_name)
+        except Exception:
+            return None

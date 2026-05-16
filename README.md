@@ -105,7 +105,7 @@ Each prevented file read avoids loading that file's full source into context for
 pip install reducethemtokens
 ```
 
-Requires Python 3.9+.
+Requires Python 3.10+.
 
 ---
 

@@ -11,7 +11,7 @@ section is wrapped in markers so it can be cleanly removed by uninstall.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
@@ -30,22 +30,51 @@ class Platform:
     config_path: str         # relative to repo root
     always_create: bool      # create the file even if it doesn't exist
     format: str              # "markdown" | "mdc"
+    detect_signals: list[str] = field(default_factory=list)  # paths that indicate this platform is in use
 
 
 PLATFORMS: list[Platform] = [
-    Platform("claude",   "Claude Code",         "CLAUDE.md",                           True,  "markdown"),
-    Platform("cursor",   "Cursor",              ".cursor/rules/rtt.mdc",               True,  "mdc"),
-    Platform("windsurf", "Windsurf",            ".windsurfrules",                      True,  "markdown"),
-    Platform("codex",    "Codex / OpenAI",      "AGENTS.md",                           True,  "markdown"),
-    Platform("copilot",  "GitHub Copilot",      ".github/copilot-instructions.md",     True,  "markdown"),
-    Platform("kiro",     "Kiro",                ".kiro/steering/rtt.md",               True,  "markdown"),
-    Platform("gemini",   "Gemini CLI",          "GEMINI.md",                           True,  "markdown"),
-    Platform("aider",    "Aider",               ".aider/prompts/conventions.md",       True,  "markdown"),
-    Platform("continue", "Continue.dev",        ".continue/rules/rtt.md",              True,  "markdown"),
-    Platform("zed",      "Zed",                 ".rules",                              True,  "markdown"),
+    Platform("claude",   "Claude Code",         "CLAUDE.md",                           True,  "markdown",
+             ["CLAUDE.md", ".claude"]),
+    Platform("cursor",   "Cursor",              ".cursor/rules/rtt.mdc",               True,  "mdc",
+             [".cursor"]),
+    Platform("windsurf", "Windsurf",            ".windsurfrules",                      True,  "markdown",
+             [".windsurfrules", ".windsurf"]),
+    Platform("codex",    "Codex / OpenAI",      "AGENTS.md",                           True,  "markdown",
+             ["AGENTS.md"]),
+    Platform("copilot",  "GitHub Copilot",      ".github/copilot-instructions.md",     True,  "markdown",
+             [".github"]),
+    Platform("kiro",     "Kiro",                ".kiro/steering/rtt.md",               True,  "markdown",
+             [".kiro"]),
+    Platform("gemini",   "Gemini CLI",          "GEMINI.md",                           True,  "markdown",
+             ["GEMINI.md"]),
+    Platform("aider",    "Aider",               ".aider/prompts/conventions.md",       True,  "markdown",
+             [".aider"]),
+    Platform("continue", "Continue.dev",        ".continue/rules/rtt.md",              True,  "markdown",
+             [".continue"]),
+    Platform("zed",      "Zed",                 ".rules",                              True,  "markdown",
+             [".zed", ".rules"]),
 ]
 
 PLATFORM_BY_NAME: dict[str, Platform] = {p.name: p for p in PLATFORMS}
+
+
+def detect_platforms(repo_root: str) -> list[str]:
+    """Detect which AI agent platforms are in use based on config files/dirs.
+
+    Returns a list of platform names that were detected. If nothing is
+    detected, returns an empty list (caller should fall back to all platforms).
+    """
+    root = Path(repo_root)
+    detected: list[str] = []
+
+    for p in PLATFORMS:
+        for signal in p.detect_signals:
+            if (root / signal).exists():
+                detected.append(p.name)
+                break
+
+    return detected
 
 
 # ── instruction text ──────────────────────────────────────────────────────────

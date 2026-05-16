@@ -1,4 +1,4 @@
-from rtt.installer import PLATFORM_BY_NAME, install, uninstall
+from rtt.installer import PLATFORM_BY_NAME, detect_platforms, install, uninstall
 
 
 def test_continue_platform_is_registered():
@@ -32,3 +32,56 @@ def test_install_and_uninstall_continue_platform(tmp_path):
     assert len(uninstall_results) == 1
     assert uninstall_results[0].platform == "continue"
     assert not config.exists()
+
+
+# ── detect_platforms tests ────────────────────────────────────────────────────
+
+def test_detect_empty_repo(tmp_path):
+    assert detect_platforms(str(tmp_path)) == []
+
+
+def test_detect_claude_md(tmp_path):
+    (tmp_path / "CLAUDE.md").write_text("# test")
+    detected = detect_platforms(str(tmp_path))
+    assert detected == ["claude"]
+
+
+def test_detect_claude_dir(tmp_path):
+    (tmp_path / ".claude").mkdir()
+    detected = detect_platforms(str(tmp_path))
+    assert detected == ["claude"]
+
+
+def test_detect_cursor(tmp_path):
+    (tmp_path / ".cursor").mkdir()
+    detected = detect_platforms(str(tmp_path))
+    assert detected == ["cursor"]
+
+
+def test_detect_windsurf_rules(tmp_path):
+    (tmp_path / ".windsurfrules").write_text("# test")
+    detected = detect_platforms(str(tmp_path))
+    assert detected == ["windsurf"]
+
+
+def test_detect_multiple_platforms(tmp_path):
+    (tmp_path / "CLAUDE.md").write_text("# test")
+    (tmp_path / ".cursor").mkdir()
+    (tmp_path / "AGENTS.md").write_text("# test")
+    detected = detect_platforms(str(tmp_path))
+    assert set(detected) == {"claude", "cursor", "codex"}
+
+
+def test_detect_all_platforms(tmp_path):
+    (tmp_path / "CLAUDE.md").write_text("# test")
+    (tmp_path / ".cursor").mkdir()
+    (tmp_path / ".windsurfrules").write_text("# test")
+    (tmp_path / "AGENTS.md").write_text("# test")
+    (tmp_path / ".github").mkdir()
+    (tmp_path / ".kiro").mkdir()
+    (tmp_path / "GEMINI.md").write_text("# test")
+    (tmp_path / ".aider").mkdir()
+    (tmp_path / ".continue").mkdir()
+    (tmp_path / ".zed").mkdir()
+    detected = detect_platforms(str(tmp_path))
+    assert len(detected) == 10

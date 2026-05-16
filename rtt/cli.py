@@ -394,7 +394,9 @@ def audit(
 def install(
     path: str = typer.Argument(".", help="Path to repo or directory"),
     platform: Optional[str] = typer.Option(None, "--platform", "-p",
-        help="Target platform: claude, cursor, windsurf, codex, copilot, kiro, gemini, aider, zed. Default: all."),
+        help="Target platform: claude, cursor, windsurf, codex, copilot, kiro, gemini, aider, zed. Default: auto-detect."),
+    auto_detect: bool = typer.Option(True, "--auto-detect/--all",
+        help="Auto-detect installed platforms (default) or install for all."),
     force: bool = typer.Option(False, "--force", help="Overwrite existing rtt sections"),
     include: Optional[list[str]] = typer.Option(None, "--include", "-i",
         help="Glob pattern to include (repeatable)."),
@@ -411,6 +413,10 @@ def install(
     agent's config file instructing it to read that file at session start -
     before opening any source files.
 
+    By default, auto-detects which AI agents are in use by checking for
+    platform-specific config files/dirs. Use --all to install for every
+    supported platform regardless.
+
     Supports: Claude Code (CLAUDE.md), Cursor (.cursor/rules/), Windsurf
     (.windsurfrules), Codex/OpenAI (AGENTS.md), GitHub Copilot
     (.github/copilot-instructions.md), Kiro, Gemini CLI, Aider, Zed.
@@ -418,7 +424,7 @@ def install(
     from rtt.extractor import extract_repo, compare_repo
     from rtt.formatter import format_text
     from rtt.tokenizer import count_tokens
-    from rtt.installer import install as do_install, PLATFORMS, PLATFORM_BY_NAME
+    from rtt.installer import install as do_install, detect_platforms, PLATFORMS, PLATFORM_BY_NAME
 
     resolved = _resolve_path(path)
 
@@ -427,6 +433,20 @@ def install(
         valid = ", ".join(p.name for p in PLATFORMS)
         err_console.print(f"[red]Error:[/red] Unknown platform '{platform}'. Valid: {valid}")
         raise typer.Exit(1)
+
+    # Determine target platforms
+    if platform:
+        platform_names = [platform]
+    elif auto_detect:
+        detected = detect_platforms(resolved)
+        if detected:
+            console.print(f"[dim]Detected:[/dim] {', '.join(detected)}")
+            platform_names = detected
+        else:
+            console.print("[dim]No platforms detected, installing for all.[/dim]")
+            platform_names = None
+    else:
+        platform_names = None
 
     with console.status("[dim]Indexing repo...[/dim]", spinner="dots"):
         repo       = extract_repo(resolved, use_cache=False,
@@ -456,7 +476,6 @@ def install(
         )
 
     # Inject into agent configs
-    platform_names = [platform] if platform else None
     results = do_install(resolved, platform_names, compressed, raw, reduction, force=force)
 
     console.print()

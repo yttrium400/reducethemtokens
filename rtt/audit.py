@@ -75,6 +75,14 @@ SYMBOL_NODE_TYPES: dict[str, dict[str, str]] = {
         "class_declaration": "type",
         "protocol_declaration": "protocol",
     },
+    "csharp": {
+        "class_declaration": "class",
+        "method_declaration": "method",
+        "interface_declaration": "interface",
+        "struct_declaration": "struct",
+        "enum_declaration": "enum",
+        "property_declaration": "property",
+    },
 }
 
 # Name field for each node type (tree-sitter field names)
@@ -98,6 +106,7 @@ _FUNCTION_BODY_TYPES: dict[str, frozenset[str]] = {
         "function_declaration",
         "protocol_function_declaration",
     }),
+    "csharp":     frozenset({"method_declaration", "constructor_declaration"}),
 }
 
 

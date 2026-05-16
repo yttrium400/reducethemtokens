@@ -125,3 +125,33 @@ def test_kotlin_extraction_fixture():
     registry = next(s for s in fi.symbols if s.name == "Registry")
     assert registry.kind == "object"
     assert registry.children[0].signature == "fun lookup(id: String): User?"
+
+
+def test_csharp_extraction_fixture():
+    path = Path(__file__).parent / "fixtures" / "sample.cs"
+    fi = _extract_file(str(path))
+    assert fi is not None
+    assert fi.language == "csharp"
+    assert "System" in fi.imports
+    assert "System.Collections.Generic" in fi.imports
+
+    names = [s.name for s in fi.symbols]
+    assert "IGreeter" in names
+    assert "Greeter" in names
+    assert "Point" in names
+    assert "Color" in names
+    assert "MathHelper" in names
+
+    igreeter = next(s for s in fi.symbols if s.name == "IGreeter")
+    assert igreeter.kind == "interface"
+
+    greeter = next(s for s in fi.symbols if s.name == "Greeter")
+    assert greeter.kind == "class"
+    method_names = [c.name for c in greeter.children]
+    assert "Greet" in method_names
+
+    point = next(s for s in fi.symbols if s.name == "Point")
+    assert point.kind == "struct"
+
+    color = next(s for s in fi.symbols if s.name == "Color")
+    assert color.kind == "enum"

@@ -10,6 +10,7 @@ from rtt.languages import (
     cpp_lang,
     ruby_lang,
     swift_lang,
+    csharp_lang,
 )
 
 LANG_MODULES = {
@@ -25,4 +26,5 @@ LANG_MODULES = {
     "cpp": cpp_lang,
     "ruby": ruby_lang,
     "swift": swift_lang,
+    "csharp": csharp_lang,
 }

@@ -261,6 +261,13 @@ def _is_type_definition(class_name: str, line: str) -> bool:
     for kw in _DEF_KEYWORDS:
         if stripped.startswith(kw + class_name) or stripped.startswith(kw.strip() + '(' + class_name):
             return True
+        # Handle modifiers before keyword: "abstract class Foo", "data class Foo"
+        if (kw + class_name) in stripped:
+            parts = stripped.split()
+            if kw.strip() in parts:
+                kw_idx = parts.index(kw.strip())
+                if kw_idx + 1 < len(parts) and parts[kw_idx + 1] == class_name:
+                    return True
     # Bare "ClassName:" pattern (Ruby)
     if stripped == class_name + ':' or stripped.startswith(class_name + '('):
         return True

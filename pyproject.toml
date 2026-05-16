@@ -41,6 +41,7 @@ dependencies = [
     "tree-sitter-ruby>=0.23.0",
     "tree-sitter-swift>=0.7.0",
     "tree-sitter-lua>=0.2.0",
+    "tree-sitter-php>=0.23.0",
     "tree-sitter-c-sharp>=0.23.0",
     "tiktoken>=0.7.0",
     "typer>=0.12.0",

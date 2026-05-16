@@ -284,6 +284,22 @@ def _extract_imports(root: Node, source: bytes, lang_name: str, _lang_mod) -> li
             elif t == "function_call":
                 _extract_lua_require(node)
 
+        elif lang_name == "php":
+            if t == "namespace_use_declaration":
+                for child in node.children:
+                    if child.type == "namespace_use_clause":
+                        for sub in child.children:
+                            if sub.type == "qualified_name":
+                                add(text(sub).strip())
+                                break
+            elif t in ("require_expression", "require_once_expression"):
+                for child in node.children:
+                    if child.type == "string":
+                        for sc in child.children:
+                            if sc.type == "string_content":
+                                add_module(text(sc))
+                                break
+
         if len(result) >= 30:
             break
 
@@ -417,12 +433,14 @@ def _node_to_symbol(node: Node, source: bytes, lang_name: str, lang_mod, depth: 
             sym = _extract_csharp_symbol(node, source, lang_mod)
         elif lang_name == "lua":
             sym = _extract_lua_symbol(node, source, lang_mod)
+        elif lang_name == "php":
+            sym = _extract_php_symbol(node, source, lang_mod)
     except Exception:
         return None
 
     if (
         sym
-        and sym.kind in ("class", "struct", "enum", "protocol", "extension", "interface", "object")
+        and sym.kind in ("class", "struct", "enum", "protocol", "extension", "interface", "object", "trait")
         and depth == 0
     ):
         # Unwrap wrapper nodes to reach the actual class definition node whose
@@ -431,7 +449,7 @@ def _node_to_symbol(node: Node, source: bytes, lang_name: str, lang_mod, depth: 
         #          export class Foo      ->  export_statement     -> class_declaration
         class_node = node
         _WRAPPER_TYPES = ("decorated_definition", "export_statement")
-        _CLASS_TYPES   = ("class_definition", "class_declaration", "protocol_declaration", "object_declaration")
+        _CLASS_TYPES   = ("class_definition", "class_declaration", "protocol_declaration", "object_declaration", "trait_declaration")
         if node.type in _WRAPPER_TYPES:
             for child in node.children:
                 if child.type in _CLASS_TYPES:
@@ -979,7 +997,7 @@ def compare_repo(path: str) -> CompareReport:
 
 
 def _extract_lua_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol]:
-    # function M.greet(name) or function M:add(a, b)
+
     if node.type == "function_declaration":
         is_local = any(child.type == "local" for child in node.children)
         name_node = None
@@ -996,7 +1014,7 @@ def _extract_lua_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol]
             return Symbol(name=name, kind="function", signature=f"local function {name}{params}")
         return Symbol(name=name, kind="function", signature=f"function {name}{params}")
 
-    # local M = {} — treat as table/class
+
     if node.type == "variable_declaration":
         for child in node.children:
             if child.type == "assignment_statement":
@@ -1019,4 +1037,55 @@ def _extract_lua_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol]
                                     params_node = expr.child_by_field_name("parameters")
                                     params = source[params_node.start_byte:params_node.end_byte].decode() if params_node else "()"
                                     return Symbol(name=name, kind="function", signature=f"local {name} = function{params}")
+    return None
+
+
+def _extract_php_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol]:
+    t = node.type
+
+    if t == "function_definition":
+        name_node = node.child_by_field_name("name")
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        params_node = node.child_by_field_name("parameters")
+        params = source[params_node.start_byte:params_node.end_byte].decode() if params_node else "()"
+        return_node = node.child_by_field_name("return_type")
+        ret = ""
+        if return_node:
+            ret = ": " + source[return_node.start_byte:return_node.end_byte].decode()
+        return Symbol(name=name, kind="function", signature=f"function {name}{params}{ret}")
+
+    if t == "method_declaration":
+        name_node = node.child_by_field_name("name")
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        params_node = node.child_by_field_name("parameters")
+        params = source[params_node.start_byte:params_node.end_byte].decode() if params_node else "()"
+        return_node = node.child_by_field_name("return_type")
+        ret = ""
+        if return_node:
+            ret = ": " + source[return_node.start_byte:return_node.end_byte].decode()
+        return Symbol(name=name, kind="function", signature=f"function {name}{params}{ret}")
+
+    if t in ("class_declaration", "interface_declaration", "trait_declaration", "enum_declaration"):
+        name_node = node.child_by_field_name("name")
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        sig = source[node.start_byte:node.end_byte].decode().strip()
+        # Trim at body
+        for child in node.children:
+            if child.type == "declaration_list":
+                sig = source[node.start_byte:child.start_byte].decode().strip()
+                break
+        kind_map = {
+            "class_declaration": "class",
+            "interface_declaration": "interface",
+            "trait_declaration": "trait",
+            "enum_declaration": "enum",
+        }
+        return Symbol(name=name, kind=kind_map.get(t, "class"), signature=sig)
+
     return None

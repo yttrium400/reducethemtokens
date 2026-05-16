@@ -179,3 +179,22 @@ def test_lua_extraction_fixture():
 
     color = next(s for s in fi.symbols if s.name == "Color")
     assert color.kind == "enum"
+
+
+def test_php_extraction_fixture():
+    path = Path(__file__).parent / "fixtures" / "sample.php"
+    fi = _extract_file(str(path))
+    assert fi is not None
+    assert fi.language == "php"
+    assert any("Controller" in i for i in fi.imports)
+
+    names = [s.name for s in fi.symbols]
+    assert "BaseUser" in names
+    assert "createUser" in names
+    assert "Status" in names
+
+    base_user = next(s for s in fi.symbols if s.name == "BaseUser")
+    assert base_user.kind == "class"
+
+    create_user = next(s for s in fi.symbols if s.name == "createUser")
+    assert create_user.kind == "function"

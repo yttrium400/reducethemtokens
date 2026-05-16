@@ -23,6 +23,8 @@ EXTENSION_MAP = {
     ".swift": "swift",
     ".lua": "lua",
     ".cs": "csharp",
+    ".lua": "lua",
+    ".php": "php",
 }
 
 LANGUAGE_MODULES = {
@@ -40,12 +42,15 @@ LANGUAGE_MODULES = {
     "swift":      "tree_sitter_swift",
     "lua":        "tree_sitter_lua",
     "csharp":     "tree_sitter_c_sharp",
+    "lua":        "tree_sitter_lua",
+    "php":        "tree_sitter_php",
 }
 
 # Modules that don't expose a generic language() - map to their actual function name.
 _LANGUAGE_FN = {
     "typescript": "language_typescript",
     "tsx":        "language_tsx",
+    "php":        "language_php_only",
 }
 
 

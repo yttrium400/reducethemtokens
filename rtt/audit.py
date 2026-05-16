@@ -83,6 +83,18 @@ SYMBOL_NODE_TYPES: dict[str, dict[str, str]] = {
         "enum_declaration": "enum",
         "property_declaration": "property",
     },
+    "lua": {
+        "function_declaration": "function",
+        "local_function": "function",
+    },
+    "php": {
+        "class_declaration": "class",
+        "method_declaration": "function",
+        "function_definition": "function",
+        "interface_declaration": "interface",
+        "trait_declaration": "trait",
+        "enum_declaration": "enum",
+    },
 }
 
 # Name field for each node type (tree-sitter field names)
@@ -107,6 +119,8 @@ _FUNCTION_BODY_TYPES: dict[str, frozenset[str]] = {
         "protocol_function_declaration",
     }),
     "csharp":     frozenset({"method_declaration", "constructor_declaration"}),
+    "lua":        frozenset({"function_declaration", "local_function"}),
+    "php":        frozenset({"method_declaration", "function_definition"}),
 }
 
 

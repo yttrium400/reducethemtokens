@@ -196,3 +196,16 @@ def test_dart_extraction_fixture():
     assert "Color" in names
     assert "topLevel" in names
     assert "add" in names
+
+
+def test_scala_extraction_fixture():
+    path = Path(__file__).parent / "fixtures" / "sample.scala"
+    fi = _extract_file(str(path))
+    assert fi is not None
+    assert fi.language == "scala"
+    assert any("scala.collection" in i for i in fi.imports)
+
+    names = [s.name for s in fi.symbols]
+    assert "Greeter" in names
+    assert "User" in names
+    assert "Registry" in names

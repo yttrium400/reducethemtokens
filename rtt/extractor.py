@@ -306,6 +306,19 @@ def _extract_imports(root: Node, source: bytes, lang_name: str, _lang_mod) -> li
                         uri_text = uri_text[:-5]
                     add_module(uri_text)
 
+        elif lang_name == "scala":
+            if t == "import_declaration":
+                # import foo.bar.Baz or import foo.bar.{Baz, Qux}
+                parts = []
+                for child in node.children:
+                    if child.type == "identifier":
+                        parts.append(text(child))
+                    elif child.type == "namespace_selectors":
+                        # import foo.bar.{Baz, Qux} -> foo.bar
+                        break
+                if parts:
+                    add(".".join(parts))
+
         if len(result) >= 30:
             break
 
@@ -441,12 +454,14 @@ def _node_to_symbol(node: Node, source: bytes, lang_name: str, lang_mod, depth: 
             sym = _extract_lua_symbol(node, source, lang_mod)
         elif lang_name == "dart":
             sym = _extract_dart_symbol(node, source, lang_mod)
+        elif lang_name == "scala":
+            sym = _extract_scala_symbol(node, source, lang_mod)
     except Exception:
         return None
 
     if (
         sym
-        and sym.kind in ("class", "struct", "enum", "protocol", "extension", "interface", "object", "trait", "mixin")
+        and sym.kind in ("class", "struct", "enum", "protocol", "extension", "interface", "object", "trait", "mixin", "case_class")
         and depth == 0
     ):
         # Unwrap wrapper nodes to reach the actual class definition node whose
@@ -473,6 +488,7 @@ def _node_to_symbol(node: Node, source: bytes, lang_name: str, lang_mod, depth: 
                 "body",
                 "extension_body",
                 "mixin_body",
+                "template_body",
             ],
         )
         if body:
@@ -1047,6 +1063,7 @@ def _extract_lua_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol]
                                     return Symbol(name=name, kind="function", signature=f"local {name} = function{params}")
     return None
 
+
 def _extract_dart_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol]:
     """Extract a Dart symbol from a top-level node."""
     t = node.type
@@ -1139,6 +1156,49 @@ def _extract_dart_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol
             "enum_declaration": "enum",
             "extension_declaration": "extension",
         }
+        return Symbol(name=name, kind=kind_map.get(t, "class"), signature=sig)
+
+    return None
+
+
+def _extract_scala_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol]:
+    """Extract a Scala symbol from a top-level node."""
+    t = node.type
+
+    if t in ("function_definition", "function_declaration"):
+        name_node = node.child_by_field_name("name")
+        if not name_node:
+            for child in node.children:
+                if child.type == "identifier":
+                    name_node = child
+                    break
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        sig = lang_mod.declaration_signature(source, node)
+        return Symbol(name=name, kind="function", signature=sig)
+
+    if t in ("class_definition", "trait_definition", "object_definition"):
+        name_node = node.child_by_field_name("name")
+        if not name_node:
+            for child in node.children:
+                if child.type == "identifier":
+                    name_node = child
+                    break
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        sig = lang_mod.declaration_signature(source, node)
+        kind_map = {
+            "class_definition": "class",
+            "trait_definition": "trait",
+            "object_definition": "object",
+        }
+        if t == "class_definition":
+            for child in node.children:
+                if child.type == "case":
+                    kind_map["class_definition"] = "case_class"
+                    break
         return Symbol(name=name, kind=kind_map.get(t, "class"), signature=sig)
 
     return None

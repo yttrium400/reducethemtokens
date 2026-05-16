@@ -24,6 +24,7 @@ EXTENSION_MAP = {
     ".lua": "lua",
     ".cs": "csharp",
     ".dart": "dart",
+    ".scala": "scala",
 }
 
 LANGUAGE_MODULES = {
@@ -42,6 +43,7 @@ LANGUAGE_MODULES = {
     "lua":        "tree_sitter_lua",
     "csharp":     "tree_sitter_c_sharp",
     "dart":       "tree_sitter_language_pack",
+    "scala":      "tree_sitter_scala",
 }
 
 # Modules that don't expose a generic language() - map to their actual function name.

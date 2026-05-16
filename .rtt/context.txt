@@ -1,0 +1,616 @@
+# rtt index | generated 2026-05-16 21:17 | 42 files | 7728 tokens
+# If this looks outdated, ask the user to run: rtt update
+# rtt/__init__.py [python]
+imports: dataclasses.dataclass, dataclasses.field, typing.Optional
+class Symbol
+class FileIndex
+class RepoIndex
+  def token_count(self) -> int
+  def text(self) -> str
+class CompareReport
+  def reduction_pct(self) -> float
+class DiffReport
+  def delta(self) -> int
+def index(
+    path: str,
+    include: Optional[list[str]] = None,
+    exclude: Optional[list[str]] = None,
+    max_tokens: Optional[int] = None,
+    no_tests: bool = False,
+) -> RepoIndex
+def compare(path: str) -> CompareReport
+
+# rtt/audit.py [python]
+imports: os, dataclasses.dataclass, dataclasses.field, pathlib.Path, typing.Optional, tree_sitter.Node, tree_sitter.Parser, rtt.FileIndex, rtt.Symbol, rtt.extractor.SKIP_DIRS, rtt.extractor._extract_file, rtt.languages.registry.detect_language, rtt.languages.registry.get_ts_language
+class GroundTruthSymbol
+class SignatureIssue
+class FileAudit
+  def coverage(self) -> float
+  def passed(self) -> bool
+class AuditReport
+  def total_expected(self) -> int
+  def total_found(self) -> int
+  def coverage(self) -> float
+  def total_signature_issues(self) -> int
+  def files_with_issues(self) -> list[FileAudit]
+def _extract_name(node: Node, source: bytes) -> Optional[str]  # Best-effort name extraction from a symbol node.
+def _walk_ground_truth(node: Node, source: bytes, lang: str,
+                       results: list[GroundTruthSymbol],
+                       seen: set[str],
+                       in_fn_body: bool = False)  # Recursively walk the full AST to collect symbol nodes.
+def _flatten_rtt_symbols(symbols: list[Symbol], out: Optional[list] = None) -> list[Symbol]  # Flatten nested rtt symbol tree into a flat list.
+def _check_signature(sym: Symbol, source: bytes, lang: str) -> Optional[SignatureIssue]  # Check a single signature for obvious accuracy problems.
+def audit_file(filepath: str) -> Optional[FileAudit]
+def audit_repo(path: str) -> AuditReport
+
+# rtt/bench.py [python]
+imports: os, random, re, dataclasses.dataclass, dataclasses.field, pathlib.Path, typing.Optional, rtt.RepoIndex, rtt.Symbol, rtt.extractor.extract_repo, rtt.formatter.format_file_text
+class BenchQuestion
+class QuestionResult
+class LLMQuestionResult
+class BenchReport
+  def heuristic_score(self) -> float
+  def heuristic_by_kind(self) -> dict[str, tuple[int, int]]  # Returns {kind: (passed, total)} for each question kind.
+  def heuristic_failing(self) -> list[QuestionResult]
+  def llm_score(self) -> Optional[float]
+  def llm_failing(self) -> list[LLMQuestionResult]
+def _flatten(symbols: list[Symbol]) -> list[Symbol]
+def _extract_outer_params(sig: str) -> str  # Return the content between the outermost () in the signature.
+def _split_params(params_block: str) -> list[str]  # Split a params string by top-level commas, respecting nested brackets.
+def _param_names(sig: str) -> list[str]  # Extract parameter names from a function signature, handling nested parens.
+def _return_type(sig: str) -> Optional[str]  # Extract the return type token from a function signature.
+def generate_questions(repo: RepoIndex) -> list[BenchQuestion]  # Auto-generate factual questions from the repo index.
+def _symbol_lines(symbol: str, skeleton: str) -> str  # Return the full signature for this symbol, including multi-line params.
+def _is_type_definition(class_name: str, line: str) -> bool  # True when `line` defines (not merely references) class_name.
+def _class_block(class_name: str, skeleton: str) -> str  # Return every definition block for class_name (class, struct, impl, trait…).
+def _imports_line(skeleton: str) -> str
+def score_heuristic(questions: list[BenchQuestion], repo: RepoIndex) -> list[QuestionResult]  # Check each question by searching the skeleton text for expected terms.
+def _sample_questions(questions: list[BenchQuestion], n: int) -> list[BenchQuestion]  # Sample n questions evenly across kinds.
+def _ask_claude(client, question: str, context: str) -> str
+def _judge_equivalence(client, question: str, answer_a: str, answer_b: str) -> tuple[bool, str]  # Ask Claude Haiku whether two answers convey equivalent information.
+def score_llm(
+    questions: list[BenchQuestion],
+    repo: RepoIndex,
+    repo_path: str,
+    sample_size: int,
+) -> list[LLMQuestionResult]  # Run LLM semantic equivalence eval using Claude.
+def run_bench(
+    path: str,
+    use_llm: bool = False,
+    llm_sample: int = 20,
+) -> BenchReport
+
+# rtt/cache.py [python]
+imports: json, pathlib.Path, typing.Optional, rtt.FileIndex, rtt.Symbol
+def _symbol_from_dict(d: dict) -> Symbol
+def _file_index_from_dict(d: dict) -> FileIndex
+class Cache
+  def __init__(self, repo_root: str)
+  def _load(self)
+  def get(self, filepath: str, file_hash: str) -> Optional[FileIndex]
+  def set(self, filepath: str, file_hash: str, file_index: FileIndex)
+  def _symbol_to_dict(self, sym: Symbol) -> dict
+  def _file_index_to_dict(self, fi: FileIndex) -> dict
+  def save(self)
+
+# rtt/cli.py [python]
+imports: sys, pathlib.Path, typing.Optional, typer, rich.console.Console, rich.table.Table, rich
+def _resolve_path(path: str) -> str
+def index(
+    path: str = typer.Argument(".", help="Path to repo or directory"),
+    no_cache: bool = typer.Option(False, "--no-cache", help="Disable file cache"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Write output to file"),
+    include: Optional[list[str]] = typer.Option(None, "--include", "-i",
+        help="Glob pattern to include (repeatable). e.g. --include 'src/**' --include '*.py'"),
+    exclude: Optional[list[str]] = typer.Option(None, "--exclude", "-e",
+        help="Glob pattern to exclude (repeatable). e.g. --exclude 'tests/**'"),
+    max_tokens: Optional[int] = typer.Option(None, "--max-tokens", "-m",
+        help="Trim output to fit within this token budget, dropping low-priority files first."),
+    no_tests: bool = typer.Option(False, "--no-tests",
+        help="Exclude test/spec/fixture files."),
+    format: str = typer.Option("text", "--format", "-f",
+        help="Output format: text (default) or json."),
+)  # Generate a compact skeleton index of the repo and print to stdout.
+def compare(
+    path: str = typer.Argument(".", help="Path to repo or directory"),
+    diff: Optional[str] = typer.Option(None, "--diff", help="Git range, e.g. HEAD~1..HEAD"),
+    top: int = typer.Option(10, "--top", "-n", help="Number of top files to show"),
+)  # Show token reduction stats before and after compression.
+def _compare_snapshot(path: str, top: int)
+def _compare_git(path: str, diff_range: str, top: int)
+def bench(
+    path: str = typer.Argument(".", help="Path to repo or directory"),
+    llm: bool = typer.Option(False, "--llm", help="Also run LLM semantic equivalence eval (requires ANTHROPIC_API_KEY)"),
+    sample: int = typer.Option(20, "--sample", "-n", help="Questions to send to LLM (--llm only)"),
+    show_failing: bool = typer.Option(False, "--show-failing", help="Print details of every failing question"),
+)  # Benchmark how much information the skeleton retains vs full source.
+def audit(
+    path: str = typer.Argument(".", help="Path to repo or directory"),
+    show_passing: bool = typer.Option(False, "--show-passing", help="Also list files with no issues"),
+    top: int = typer.Option(0, "--top", "-n", help="Limit to N files with issues (0 = all)"),
+)  # Audit extraction accuracy: coverage (symbols found vs expected) and signature co
+def install(
+    path: str = typer.Argument(".", help="Path to repo or directory"),
+    platform: Optional[str] = typer.Option(None, "--platform", "-p",
+        help="Target platform: claude, cursor, windsurf, codex, copilot, kiro, gemini, aider, zed. Default: auto-detect."),
+    auto_detect: bool = typer.Option(True, "--auto-detect/--all",
+        help="Auto-detect installed platforms (default) or install for all."),
+    force: bool = typer.Option(False, "--force", help="Overwrite existing rtt sections"),
+    include: Optional[list[str]] = typer.Option(None, "--include", "-i",
+        help="Glob pattern to include (repeatable)."),
+    exclude: Optional[list[str]] = typer.Option(None, "--exclude", "-e",
+        help="Glob pattern to exclude (repeatable)."),
+    max_tokens: Optional[int] = typer.Option(None, "--max-tokens", "-m",
+        help="Trim skeleton to fit within this token budget."),
+    no_tests: bool = typer.Option(False, "--no-tests",
+        help="Exclude test/spec/fixture files from the skeleton."),
+)  # Index the repo and inject context instructions into agent config files.
+def update(
+    path: str = typer.Argument(".", help="Path to repo or directory"),
+    diff: bool = typer.Option(False, "--diff", help="Show what changed since last update"),
+    include: Optional[list[str]] = typer.Option(None, "--include", "-i",
+        help="Glob pattern to include (repeatable)."),
+    exclude: Optional[list[str]] = typer.Option(None, "--exclude", "-e",
+        help="Glob pattern to exclude (repeatable)."),
+    max_tokens: Optional[int] = typer.Option(None, "--max-tokens", "-m",
+        help="Trim skeleton to fit within this token budget."),
+    no_tests: bool = typer.Option(False, "--no-tests",
+        help="Exclude test/spec/fixture files from the skeleton."),
+)  # Regenerate .rtt/context.txt after code changes.
+def uninstall(
+    path: str = typer.Argument(".", help="Path to repo or directory"),
+    platform: Optional[str] = typer.Option(None, "--platform", "-p",
+        help="Remove from a specific platform only. Default: all."),
+    clean: bool = typer.Option(False, "--clean", help="Also delete .rtt/context.txt"),
+)  # Remove rtt instructions from agent config files.
+def view(
+    path: str = typer.Argument(".", help="Path to repo or directory"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Write markdown to file instead of pager"),
+)  # Render the repo skeleton as human-readable markdown.
+def vs(
+    path: str = typer.Argument(".", help="Path to repo or directory"),
+    tool: str = typer.Option("graphify", "--tool", "-t", help="Tool to compare against (currently: graphify)"),
+    no_cleanup: bool = typer.Option(False, "--no-cleanup", help="Keep the tool's output directory after comparison"),
+)  # Compare rtt's token footprint against another repo-indexing tool.
+
+# rtt/extractor.py [python]
+imports: hashlib, os, pathlib.Path, typing.Optional, tree_sitter.Parser, tree_sitter.Node, rtt.FileIndex, rtt.RepoIndex, rtt.Symbol, rtt.CompareReport, rtt.languages.registry.detect_language, rtt.languages.registry.get_ts_language, rtt.languages.LANG_MODULES, rtt.tokenizer.count_tokens, rtt.cache.Cache
+def _get_docstring(node: Node, source: bytes) -> Optional[str]  # Extract first string literal from a function body as docstring.
+def _extract_file(filepath: str, cache: Optional[Cache] = None) -> Optional[FileIndex]
+def _extract_imports(root: Node, source: bytes, lang_name: str, _lang_mod) -> list[str]  # Extract import names using direct AST traversal (no query API needed).
+def _iter_js_iife_body(node: Node)  # Yield statement_block children from a top-level IIFE expression.
+def _iter_toplevel_nodes(root: Node, lang_name: str)  # Yield candidate top-level definition nodes, including transparent containers.
+def _iter_inside_transparent(node: Node, depth: int)  # Recursively yield definition nodes from inside transparent containers.
+def _extract_symbols(root: Node, source: bytes, lang_name: str, lang_mod) -> list[Symbol]  # Walk the AST and extract top-level symbols.
+def _node_to_symbol(node: Node, source: bytes, lang_name: str, lang_mod, depth: int) -> Optional[Symbol]
+def _find_child_by_type(node: Node, types: list[str]) -> Optional[Node]
+def _find_child(node: Node, field: str) -> Optional[Node]
+def _extract_python_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol]
+def _extract_js_symbol(node: Node, source: bytes, lang_mod, lang_name: str) -> Optional[Symbol]
+def _extract_go_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol]
+def _extract_rust_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol]
+def _extract_java_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol]
+def _kotlin_kind(node: Node) -> str
+def _extract_kotlin_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol]
+def _extract_c_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol]
+def _extract_ruby_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol]
+def _swift_keyword(node: Node) -> Optional[str]
+def _extract_csharp_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol]
+def _extract_swift_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol]
+def _matches_any(rel_path: str, patterns: list[str]) -> bool  # Return True if rel_path matches any of the given glob patterns.
+def _trim_to_budget(
+    files: list,
+    max_tokens: int,
+) -> tuple[list, int]  # Select files by priority until max_tokens budget is reached.
+def _is_test_file(rel_path: str) -> bool
+def extract_repo(
+    path: str,
+    use_cache: bool = True,
+    include: Optional[list[str]] = None,
+    exclude: Optional[list[str]] = None,
+    max_tokens: Optional[int] = None,
+    no_tests: bool = False,
+) -> RepoIndex  # Extract a structural index of the repository.
+def compare_repo(path: str) -> CompareReport
+def _extract_lua_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol]
+def _extract_dart_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol]  # Extract a Dart symbol from a top-level node.
+def _extract_scala_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol]  # Extract a Scala symbol from a top-level node.
+
+# rtt/formatter.py [python]
+imports: datetime, json, dataclasses.asdict, rtt.RepoIndex, rtt.FileIndex, rtt.Symbol
+def format_text(repo: RepoIndex) -> str  # Compact plain-text skeleton - optimized for token efficiency.
+def format_json(repo: RepoIndex) -> str  # Serialize the repo index as structured JSON.
+def format_text_with_header(repo: RepoIndex, token_count: int) -> str  # Skeleton with a staleness header as the first line.
+def format_file_text(file_index: FileIndex) -> str
+def _format_symbol_text(sym: Symbol, indent: int) -> list[str]
+def format_markdown(repo: RepoIndex) -> str  # Human-readable markdown view.
+def format_file_markdown(file_index: FileIndex) -> str
+def _format_symbol_markdown(sym: Symbol, level: int) -> list[str]
+
+# rtt/installer.py [python]
+imports: re, dataclasses.dataclass, dataclasses.field, pathlib.Path, typing.Optional
+class Platform
+def detect_platforms(repo_root: str) -> list[str]  # Detect which AI agent platforms are in use based on config files/dirs.
+def _instruction_block(
+    context_path: str,
+    compressed_tokens: int,
+    raw_tokens: int,
+    reduction: float,
+    fmt: str,
+) -> str
+def _has_rtt_section(text: str) -> bool
+def _replace_rtt_section(text: str, new_block: str) -> str
+def _remove_rtt_section(text: str) -> str
+class InstallResult
+def install(
+    repo_root: str,
+    platform_names: Optional[list[str]],
+    compressed_tokens: int,
+    raw_tokens: int,
+    reduction: float,
+    force: bool = False,
+) -> list[InstallResult]
+def uninstall(
+    repo_root: str,
+    platform_names: Optional[list[str]],
+    remove_skeleton: bool = False,
+) -> list[InstallResult]
+def install_git_hook(repo_root: str) -> str  # Install a pre-commit hook that runs `rtt update` before every commit.
+def _remove_git_hook(repo_root: Path)
+
+# rtt/languages/__init__.py [python]
+imports: rtt.languages.python_lang, rtt.languages.javascript_lang, rtt.languages.typescript_lang, rtt.languages.go_lang, rtt.languages.rust_lang, rtt.languages.java_lang, rtt.languages.kotlin_lang, rtt.languages.c_lang, rtt.languages.cpp_lang, rtt.languages.ruby_lang, rtt.languages.swift_lang, rtt.languages.lua_lang, rtt.languages.csharp_lang, rtt.languages.dart_lang, rtt.languages.scala_lang
+
+# rtt/languages/c_lang.py [python]
+def extract_fn_signature(source: bytes, name_node, params_node, return_node=None) -> str
+
+# rtt/languages/cpp_lang.py [python]
+def extract_fn_signature(source: bytes, name_node, params_node, return_node=None) -> str
+
+# rtt/languages/csharp_lang.py [python]
+def extract_fn_signature(source: bytes, name_node, params_node, return_node=None) -> str
+def extract_class_signature(source: bytes, node) -> str
+
+# rtt/languages/dart_lang.py [python]
+def _text(source: bytes, node) -> str
+def declaration_signature(source: bytes, node) -> str  # Return a compact Dart declaration without its implementation body.
+def extract_fn_signature(source: bytes, name_node, params_node=None, return_node=None) -> str
+def extract_class_signature(source: bytes, node) -> str
+
+# rtt/languages/go_lang.py [python]
+def extract_fn_signature(source: bytes, name_node, params_node, return_node=None) -> str
+
+# rtt/languages/java_lang.py [python]
+def extract_fn_signature(source: bytes, name_node, params_node, return_node=None) -> str
+
+# rtt/languages/javascript_lang.py [python]
+def extract_fn_signature(source: bytes, name_node, params_node, return_node=None) -> str
+
+# rtt/languages/kotlin_lang.py [python]
+def declaration_signature(source: bytes, node) -> str  # Return a compact Kotlin declaration without its implementation body.
+def extract_fn_signature(
+    source: bytes,
+    name_node,
+    params_node=None,
+    return_node=None,
+) -> str
+def extract_class_signature(source: bytes, node) -> str
+
+# rtt/languages/lua_lang.py [python]
+def extract_fn_signature(source: bytes, name_node, params_node, return_node=None) -> str
+
+# rtt/languages/python_lang.py [python]
+def extract_fn_signature(source: bytes, name_node, params_node, return_node=None) -> str
+
+# rtt/languages/registry.py [python]
+imports: importlib, pathlib.Path, typing.Optional
+def detect_language(filepath: str) -> Optional[str]
+def get_ts_language(lang_name: str)
+
+# rtt/languages/ruby_lang.py [python]
+def extract_fn_signature(source: bytes, name_node, params_node, return_node=None) -> str
+
+# rtt/languages/rust_lang.py [python]
+def extract_fn_signature(source: bytes, name_node, params_node, return_node=None) -> str
+
+# rtt/languages/scala_lang.py [python]
+def declaration_signature(source: bytes, node) -> str  # Return a compact Scala declaration without its implementation body.
+def extract_fn_signature(source: bytes, name_node, params_node=None, return_node=None) -> str
+def extract_class_signature(source: bytes, node) -> str
+
+# rtt/languages/swift_lang.py [python]
+def _text(source: bytes, node) -> str
+def declaration_signature(source: bytes, node) -> str  # Return a compact Swift declaration without its implementation body.
+def extract_fn_signature(source: bytes, name_node, params_node=None, return_node=None) -> str
+def extract_class_signature(source: bytes, node) -> str
+
+# rtt/languages/typescript_lang.py [python]
+def extract_fn_signature(source: bytes, name_node, params_node, return_node=None) -> str
+
+# rtt/tokenizer.py [python]
+imports: os, pathlib.Path
+def count_tokens(text: str) -> int
+def count_file_tokens(filepath: str) -> int
+def count_raw_repo_tokens(path: str) -> tuple[int, dict[str, int]]
+
+# tests/__init__.py [python]
+
+# tests/fixtures/sample.py [python]
+imports: os, sys, pathlib.Path
+class DataProcessor
+  def __init__(self, config: dict) -> None
+  def process(self, data: list) -> list  # Main processing logic.
+  def _transform(self, item)
+def load_data(path: str) -> list  # Load data from a file.
+
+# tests/fixtures/sample_decorated.py [python]
+imports: dataclasses.dataclass, dataclasses.field, typing.Optional, functools
+def my_decorator(fn)
+class Point
+  def magnitude(self) -> float
+  def origin() -> "Point"
+  def from_tuple(cls, t: tuple) -> "Point"
+  def distance_to(self, other: "Point") -> float
+class Rectangle
+  def width(self) -> float
+  def height(self) -> float
+  def area(self) -> float
+def compute(x: int, y: int) -> int  # Add two numbers.
+class BaseProcessor
+  def process(self, data: list) -> list
+  def validate(self, item) -> bool
+class ConcreteProcessor(BaseProcessor)
+  def process(self, data: list) -> list
+
+# tests/fixtures/sample_go.go [go]
+type Config struct {
+	Host string
+	Port int
+}
+type Server struct {
+	config Config
+}
+func NewServer(config Config) *Server
+func (s *Server) Start()
+func (s *Server) Stop()
+func joinParts(parts []string, sep string) string
+
+# tests/fixtures/sample_js.js [javascript]
+imports: fs.readFile, path
+function parseConfig(filePath)
+const loadEnv = (name) =>
+class DataStore
+  constructor(config)
+  get(key)
+  set(key, value)
+function createStore(config)
+class Logger
+  log(msg)
+
+# tests/fixtures/sample_rs.rs [rust]
+imports: std::collections::HashMap
+struct Config
+enum Status
+trait Processor
+impl Config
+  fn new() -> Self
+  fn get(&self, key: &str) -> Option<&String>
+  fn set(&mut self, key: String, value: String)
+fn parse_config(input: &str) -> Config
+
+# tests/fixtures/sample_try_except.py [python]
+imports: sys
+def fast_loads(s: str) -> dict  # Parse JSON using ujson.
+def fast_dumps(obj: dict) -> str
+class Readable(Protocol)
+  def read(self) -> bytes
+def get_path_sep() -> str
+def always_present(x: int) -> int  # This function is always at top level.
+
+# tests/test_accuracy.py [python]
+imports: textwrap, tempfile, os, pathlib.Path, pytest, rtt.audit.audit_file, rtt.audit.audit_repo, rtt.extractor._extract_file
+def write_temp(content: str, suffix: str) -> str
+def assert_full_coverage(path: str, min_expected: int = 1)  # Assert 100% coverage with no signature issues.
+class TestPythonCore
+  def test_plain_functions_and_class(self)
+  def test_return_type_in_signature(self)
+  def test_docstring_captured(self)
+  def test_class_with_base(self)
+  def test_imports_extracted(self)
+  def test_nested_function_not_extracted(self)  # Functions inside functions are implementation details - should not appear.
+  def test_empty_file(self)
+  def test_imports_only_file(self)
+  def test_multiline_params(self)
+class TestPythonDecorated
+  def test_property_inside_plain_class(self)
+  def test_dataclass_with_property(self)
+  def test_staticmethod_and_classmethod(self)
+  def test_decorated_top_level_function(self)
+  def test_fixture_decorated(self)  # Full audit of the decorated fixture file.
+class TestPythonTryExcept
+  def test_function_in_try_block(self)
+  def test_class_in_try_block(self)
+  def test_function_in_if_block(self)
+  def test_dedup_try_except_same_name(self)  # Same name in try and except should appear only once.
+  def test_fixture_try_except(self)  # Full audit of the try/except fixture file.
+class TestJavaScript
+  def test_function_declaration(self)
+  def test_class_with_methods(self)
+  def test_arrow_function_assignment(self)
+  def test_exported_function(self)
+  def test_fixture_js(self)
+class TestGo
+  def test_functions_and_struct(self)
+  def test_return_type_in_go_signature(self)
+  def test_fixture_go(self)
+class TestRust
+  def test_functions_and_struct(self)
+  def test_impl_block_methods(self)
+  def test_trait_definition(self)
+  def test_fixture_rust(self)
+class TestEdgeCases
+  def test_single_function_file(self)
+  def test_deeply_nested_class_methods(self)  # Class with many methods at one level deep - all should be found.
+  def test_unsupported_extension_returns_none(self)
+  def test_syntax_error_doesnt_crash(self)  # Files with syntax errors should not raise - tree-sitter is error-tolerant.
+  def test_unicode_identifiers(self)
+  def test_very_long_signature_not_truncated(self)
+class TestRepoAudit
+  def test_fixtures_dir_100_percent(self, tmp_path)  # Audit a repo containing all fixture files - expect 100% coverage.
+  def test_self_audit_100_percent(self)  # rtt should achieve 100% on its own source code.
+
+# tests/test_accuracy_controlled.py [python]
+imports: os, textwrap, tempfile, pathlib.Path, pytest
+def _ask(client, question: str, context: str, context_label: str) -> str
+def _judge(client, question: str, ground_truth_answer: str, test_answer: str) -> tuple[bool, str]
+def test_skeleton_correctness(tmp_path, capsys)
+
+# tests/test_agent_workflow.py [python]
+imports: os, textwrap, pathlib.Path, pytest
+def _ask_once(client, question: str, skeleton: str | None) -> dict  # Single API call. Returns whether agent wanted files and its token usage.
+def _batch_judge(client, rows: list[dict]) -> dict[int, str]  # One call to judge answer quality for all questions. Returns {idx: GOOD|PARTIAL|W
+def test_agent_workflow(capsys)
+
+# tests/test_audit.py [python]
+imports: textwrap, tempfile, os, rtt.audit.audit_file, rtt.audit.audit_repo, rtt.audit._flatten_rtt_symbols, rtt.audit._check_signature, rtt.Symbol
+def write_temp(content: str, suffix: str) -> str
+def test_python_full_coverage()
+def test_python_decorated_function_found()
+def test_coverage_ratio()
+def test_unsupported_file_returns_none()
+def test_signature_valid()
+def test_signature_empty()
+def test_signature_missing_name()
+def test_signature_unbalanced_parens()
+def test_signature_missing_parens()
+def test_class_signature_no_parens_ok()
+def test_flatten_nested()
+def test_audit_repo_on_self(tmp_path)
+
+# tests/test_bench.py [python]
+imports: textwrap, tempfile, os, pathlib.Path, pytest, rtt.FileIndex, rtt.Symbol, rtt.bench.BenchQuestion, rtt.bench.generate_questions, rtt.bench.score_heuristic, rtt.bench._param_names, rtt.bench._return_type, rtt.bench._symbol_lines, rtt.bench._class_block, rtt.bench._imports_line, rtt.bench.run_bench, rtt.bench._split_params, rtt.bench._extract_outer_params, rtt.extractor.extract_repo, rtt.formatter.format_file_text
+class TestParamNames
+  def test_basic_params(self)
+  def test_skips_self(self)
+  def test_skips_cls(self)
+  def test_star_args(self)
+  def test_default_values(self)
+  def test_no_params(self)
+  def test_go_style(self)
+  def test_rust_style(self)
+  def test_nested_default_does_not_pollute(self)
+  def test_split_params_respects_nesting(self)
+class TestReturnType
+  def test_simple(self)
+  def test_optional(self)
+  def test_custom_type(self)
+  def test_none_filtered(self)
+  def test_primitives_returned(self)
+  def test_no_arrow(self)
+  def test_go_style_post_paren(self)
+class TestSkeletonSearchHelpers
+  def test_symbol_lines_function(self)
+  def test_symbol_lines_method(self)
+  def test_class_block_captures_children(self)
+  def test_imports_line(self)
+  def test_imports_line_missing(self)
+class TestQuestionGeneration
+  def _make_repo(self, code: str, lang: str = "python") -> tuple
+  def test_generates_params_question(self, tmp_path)
+  def test_generates_return_type_question(self, tmp_path)
+  def test_generates_methods_question(self, tmp_path)
+  def test_generates_imports_question(self, tmp_path)
+  def test_no_params_question_for_self_only(self, tmp_path)
+  def test_no_imports_question_for_single_import(self, tmp_path)
+class TestHeuristicScoring
+  def test_params_pass(self, tmp_path)
+  def test_return_type_pass(self, tmp_path)
+  def test_methods_pass(self, tmp_path)
+  def test_imports_pass(self, tmp_path)
+  def test_detects_missing_term(self)  # Manually constructed failing question.
+  def test_score_property(self, tmp_path)
+class TestBenchOnFixtures
+  def test_fixtures_100_percent(self, tmp_path)  # All fixture files should achieve 100% on the heuristic bench.
+  def test_self_bench_100_percent(self)  # rtt's own source should score 100% on the heuristic bench.
+
+# tests/test_cli.py [python]
+imports: json, pathlib.Path, pytest, typer.testing.CliRunner, rtt.cli.app
+def _write(tmp_path: Path, rel: str, content: str = "") -> Path
+def _make_repo(tmp_path: Path) -> Path
+class TestIndexCommand
+  def test_index_text_output(self, tmp_path)
+  def test_index_json_output(self, tmp_path)
+  def test_index_json_structure(self, tmp_path)
+  def test_index_json_symbols_have_fields(self, tmp_path)
+  def test_index_invalid_format(self, tmp_path)
+  def test_index_invalid_path(self, tmp_path)
+  def test_index_output_file(self, tmp_path)
+  def test_index_output_file_json(self, tmp_path)
+  def test_index_no_tests_excludes_test_files(self, tmp_path)
+  def test_index_include_filter(self, tmp_path)
+  def test_index_exclude_filter(self, tmp_path)
+  def test_index_max_tokens(self, tmp_path)
+  def test_index_empty_repo(self, tmp_path)
+  def test_index_json_empty_repo(self, tmp_path)
+class TestInstallAutoDetect
+  def test_install_detects_claude_md(self, tmp_path)
+  def test_install_detects_cursor_dir(self, tmp_path)
+  def test_install_detects_multiple_platforms(self, tmp_path)
+  def test_install_all_flag_skips_detection(self, tmp_path)
+  def test_install_all_writes_to_all_platforms(self, tmp_path)
+  def test_install_no_platforms_detected_falls_back_to_all(self, tmp_path)
+  def test_install_explicit_platform_overrides_detection(self, tmp_path)
+  def test_install_invalid_platform(self, tmp_path)
+  def test_install_writes_skeleton(self, tmp_path)
+  def test_install_force_overwrites(self, tmp_path)
+  def test_install_skips_without_force(self, tmp_path)
+  def test_install_detects_windsurf_rules_file(self, tmp_path)
+  def test_install_detects_github_dir_for_copilot(self, tmp_path)
+  def test_install_detects_continue_dir(self, tmp_path)
+class TestUpdateCommand
+  def test_update_creates_skeleton(self, tmp_path)
+  def test_update_refreshes_skeleton(self, tmp_path)
+  def test_update_diff_no_changes(self, tmp_path)
+  def test_update_diff_shows_added(self, tmp_path)
+  def test_update_warns_if_no_skeleton(self, tmp_path)
+class TestUninstallCommand
+  def test_uninstall_removes_section(self, tmp_path)
+  def test_uninstall_nothing_installed(self, tmp_path)
+  def test_uninstall_clean_removes_skeleton(self, tmp_path)
+  def test_uninstall_invalid_platform(self, tmp_path)
+  def test_uninstall_specific_platform_leaves_others(self, tmp_path)
+
+# tests/test_extractor.py [python]
+imports: textwrap, tempfile, os, pathlib.Path, rtt.extractor._extract_file, rtt.formatter.format_file_text, rtt.formatter.format_file_markdown
+def write_temp(content: str, suffix: str) -> str
+def test_python_function()
+def test_format_text()
+def test_format_markdown()
+def test_token_count()
+def test_swift_extraction_fixture()
+def test_kotlin_extraction_fixture()
+def test_lua_extraction_fixture()
+def test_dart_extraction_fixture()
+def test_scala_extraction_fixture()
+
+# tests/test_formatter.py [python]
+imports: json, pathlib.Path, rtt.RepoIndex, rtt.FileIndex, rtt.Symbol, rtt.formatter.format_json
+def _make_repo() -> RepoIndex
+def test_format_json_is_valid_json()
+def test_format_json_file_count()
+def test_format_json_file_fields()
+def test_format_json_symbols()
+def test_format_json_nested_children()
+def test_format_json_empty_repo()
+
+# tests/test_installer.py [python]
+imports: rtt.installer.PLATFORM_BY_NAME, rtt.installer.detect_platforms, rtt.installer.install, rtt.installer.uninstall
+def test_continue_platform_is_registered()
+def test_install_and_uninstall_continue_platform(tmp_path)
+def test_detect_empty_repo(tmp_path)
+def test_detect_claude_md(tmp_path)
+def test_detect_claude_dir(tmp_path)
+def test_detect_cursor(tmp_path)
+def test_detect_windsurf_rules(tmp_path)
+def test_detect_multiple_platforms(tmp_path)
+def test_detect_all_platforms(tmp_path)

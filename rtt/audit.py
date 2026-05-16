@@ -103,6 +103,13 @@ SYMBOL_NODE_TYPES: dict[str, dict[str, str]] = {
         "trait_declaration": "trait",
         "enum_declaration": "enum",
     },
+    "scala": {
+        "class_definition": "class",
+        "trait_definition": "trait",
+        "object_definition": "object",
+        "function_definition": "function",
+        "function_declaration": "function",
+    },
 }
 
 # Name field for each node type (tree-sitter field names)
@@ -130,6 +137,7 @@ _FUNCTION_BODY_TYPES: dict[str, frozenset[str]] = {
     "lua":        frozenset({"function_declaration", "local_function"}),
     "dart":       frozenset({"function_body", "block"}),
     "php":        frozenset({"method_declaration", "function_definition"}),
+    "scala":      frozenset({"function_definition", "function_declaration"}),
 }
 
 
